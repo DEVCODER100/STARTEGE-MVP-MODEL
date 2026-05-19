@@ -1,40 +1,17 @@
 import sharp from "sharp";
-import { Resvg } from "@resvg/resvg-js";
-import { tmpdir } from "node:os";
-import { writeFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
 import { ANTON_TTF_BASE64 } from "./font-data";
 
 // Compose a text layer onto an AI-generated (text-free) image.
-// Text is rendered with an EXPLICIT embedded font via resvg — so it works
-// identically on any server (Vercel's Linux runtime has no system fonts).
+// The font is embedded directly in the SVG via @font-face base64 — so text
+// rendering has ZERO dependency on system fonts, files, or network. If it
+// renders locally it renders identically on any server (incl. Vercel).
 
 export interface OverlayText {
   headline?: string | null;
   cta?: string | null;
 }
 
-// Anton — a heavy display font, great for ad headlines. Open Font License.
-const FONT_FAMILY = "Anton";
-
-// resvg-js loads fonts from file paths. The font is embedded in the code
-// (font-data.ts) and written once to the OS temp dir (writable on Vercel).
-// No network, no bundled binary, no file-tracing — always works.
-let _fontPath: string | null = null;
-
-function getFontPath(): string | null {
-  if (_fontPath) return _fontPath;
-  try {
-    const p = join(tmpdir(), "stratege-anton.ttf");
-    if (!existsSync(p)) {
-      writeFileSync(p, Buffer.from(ANTON_TTF_BASE64, "base64"));
-    }
-    _fontPath = p;
-    return p;
-  } catch {
-    return null;
-  }
-}
+const FONT_FAMILY = "Anton"; // heavy display font — ideal for ad headlines
 
 function escapeXml(s: string): string {
   return s
@@ -102,7 +79,7 @@ export async function compositeText(
   const ctaPadY = Math.round(ctaSize * 0.5);
   const ctaH = ctaSize + ctaPadY * 2;
   const ctaW = cta
-    ? Math.round(cta.length * ctaSize * 0.56) + ctaPadX * 2
+    ? Math.round(cta.length * ctaSize * 0.58) + ctaPadX * 2
     : 0;
 
   const gap = cta ? Math.round(W * 0.04) : 0;
@@ -142,8 +119,16 @@ export async function compositeText(
       </text>`;
   }
 
+  // Font embedded as @font-face base64 — librsvg (Sharp's SVG engine) renders
+  // it with no system-font dependency.
   const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
     <defs>
+      <style>
+        @font-face {
+          font-family: '${FONT_FAMILY}';
+          src: url(data:font/ttf;base64,${ANTON_TTF_BASE64});
+        }
+      </style>
       <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
         <stop offset="100%" stop-color="#000000" stop-opacity="0.78"/>
@@ -154,22 +139,8 @@ export async function compositeText(
     ${ctaSvg}
   </svg>`;
 
-  // Render the SVG (incl. text) to a transparent PNG with an EXPLICIT font.
-  const fontPath = getFontPath();
-  const resvg = new Resvg(svg, {
-    fitTo: { mode: "width", value: W },
-    font: fontPath
-      ? {
-          fontFiles: [fontPath],
-          loadSystemFonts: false,
-          defaultFontFamily: FONT_FAMILY,
-        }
-      : { loadSystemFonts: true },
-  });
-  const overlayPng = resvg.render().asPng();
-
   return img
-    .composite([{ input: overlayPng, top: 0, left: 0 }])
+    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
     .jpeg({ quality: 90 })
     .toBuffer();
 }

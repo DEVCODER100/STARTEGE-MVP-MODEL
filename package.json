@@ -22,7 +22,6 @@
   "dependencies": {
     "@clerk/nextjs": "^5.7.6",
     "@neondatabase/serverless": "^1.1.0",
-    "@resvg/resvg-js": "^2.6.2",
     "@vercel/blob": "^2.4.0",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",

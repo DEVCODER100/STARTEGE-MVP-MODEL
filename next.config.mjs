@@ -6,9 +6,9 @@ const nextConfig = {
       { protocol: "https", hostname: "*.ideogram.ai" },
     ],
   },
-  // Native modules — keep them external so Next doesn't try to bundle binaries.
+  // Native module — keep external so Next doesn't try to bundle the binary.
   experimental: {
-    serverComponentsExternalPackages: ["sharp", "@resvg/resvg-js"],
+    serverComponentsExternalPackages: ["sharp"],
   },
 };
 
