@@ -1,10 +1,11 @@
-import sharp from "sharp";
+import { createCanvas, loadImage, GlobalFonts } from "@napi-rs/canvas";
+import type { SKRSContext2D } from "@napi-rs/canvas";
 import { ANTON_TTF_BASE64 } from "./font-data";
 
 // Compose a text layer onto an AI-generated (text-free) image.
-// The font is embedded directly in the SVG via @font-face base64 — so text
-// rendering has ZERO dependency on system fonts, files, or network. If it
-// renders locally it renders identically on any server (incl. Vercel).
+// Text is drawn with @napi-rs/canvas using a font registered directly from
+// an in-memory buffer — no SVG, no system fonts, no files. Renders
+// identically on any machine, including Vercel's Linux runtime.
 
 export interface OverlayText {
   headline?: string | null;
@@ -13,29 +14,31 @@ export interface OverlayText {
 
 const FONT_FAMILY = "Anton"; // heavy display font — ideal for ad headlines
 
-function escapeXml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+let _registered = false;
+function ensureFont() {
+  if (_registered) return;
+  GlobalFonts.register(Buffer.from(ANTON_TTF_BASE64, "base64"), FONT_FAMILY);
+  _registered = true;
 }
 
-/** Greedy word-wrap. Anton is condensed (~0.46em/char). */
-function wrapLines(text: string, fontSize: number, maxWidth: number): string[] {
-  const charW = fontSize * 0.46;
-  const maxChars = Math.max(6, Math.floor(maxWidth / charW));
+/** Word-wrap using real measured text width. */
+function wrap(
+  ctx: SKRSContext2D,
+  text: string,
+  fontPx: number,
+  maxWidth: number
+): string[] {
+  ctx.font = `${fontPx}px ${FONT_FAMILY}`;
   const words = text.replace(/\s+/g, " ").trim().split(" ");
   const lines: string[] = [];
   let line = "";
   for (const w of words) {
-    const candidate = line ? `${line} ${w}` : w;
-    if (candidate.length > maxChars && line) {
+    const cand = line ? `${line} ${w}` : w;
+    if (ctx.measureText(cand).width > maxWidth && line) {
       lines.push(line);
       line = w;
     } else {
-      line = candidate;
+      line = cand;
     }
   }
   if (line) lines.push(line);
@@ -50,97 +53,86 @@ export async function compositeText(
   baseImage: Buffer,
   text: OverlayText
 ): Promise<Buffer> {
-  const img = sharp(baseImage);
-  const meta = await img.metadata();
-  const W = meta.width ?? 1080;
-  const H = meta.height ?? 1350;
+  ensureFont();
+
+  const img = await loadImage(baseImage);
+  const W = img.width;
+  const H = img.height;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0, W, H);
 
   const headline = (text.headline ?? "").trim();
-  const cta = (text.cta ?? "").trim();
+  const cta = (text.cta ?? "").trim().toUpperCase();
 
   if (!headline && !cta) {
-    return img.jpeg({ quality: 90 }).toBuffer();
+    return await canvas.encode("jpeg", 90);
   }
 
   const margin = Math.round(W * 0.07);
   const maxTextWidth = W - margin * 2;
 
-  // Adaptive headline sizing
-  let hSize = Math.round(W * 0.075);
-  let hLines = wrapLines(headline, hSize, maxTextWidth);
-  while (hLines.length > 4 && hSize > Math.round(W * 0.044)) {
+  // Headline — shrink font until it fits in <= 4 lines.
+  let hSize = Math.round(W * 0.082);
+  let lines = headline ? wrap(ctx, headline, hSize, maxTextWidth) : [];
+  while (lines.length > 4 && hSize > Math.round(W * 0.046)) {
     hSize -= 4;
-    hLines = wrapLines(headline, hSize, maxTextWidth);
+    lines = wrap(ctx, headline, hSize, maxTextWidth);
   }
-  const hLineHeight = Math.round(hSize * 1.12);
+  const hLineHeight = Math.round(hSize * 1.14);
 
-  const ctaSize = Math.round(W * 0.038);
-  const ctaPadX = Math.round(ctaSize * 1.0);
-  const ctaPadY = Math.round(ctaSize * 0.5);
+  // CTA pill — sized to the measured text.
+  const ctaSize = Math.round(W * 0.042);
+  ctx.font = `${ctaSize}px ${FONT_FAMILY}`;
+  const ctaTextW = cta ? ctx.measureText(cta).width : 0;
+  const ctaPadX = Math.round(ctaSize * 1.05);
+  const ctaPadY = Math.round(ctaSize * 0.55);
   const ctaH = ctaSize + ctaPadY * 2;
-  const ctaW = cta
-    ? Math.round(cta.length * ctaSize * 0.58) + ctaPadX * 2
-    : 0;
+  const ctaW = cta ? Math.round(ctaTextW) + ctaPadX * 2 : 0;
 
-  const gap = cta ? Math.round(W * 0.04) : 0;
-  const blockH =
-    (headline ? hLines.length * hLineHeight : 0) + (cta ? ctaH + gap : 0);
+  const gap = cta ? Math.round(W * 0.045) : 0;
+  const blockH = lines.length * hLineHeight + (cta ? ctaH + gap : 0);
 
   const bottomMargin = Math.round(W * 0.085);
   const blockTop = H - bottomMargin - blockH;
-  const scrimTop = Math.max(0, blockTop - Math.round(H * 0.14));
+  const scrimTop = Math.max(0, blockTop - Math.round(H * 0.16));
   const cx = Math.round(W / 2);
 
-  const headlineSvg = headline
-    ? `<text x="${cx}" y="${blockTop + hSize}" text-anchor="middle"
-         font-family="${FONT_FAMILY}" font-size="${hSize}" fill="#FFFFFF">
-        ${hLines
-          .map(
-            (ln, i) =>
-              `<tspan x="${cx}" dy="${i === 0 ? 0 : hLineHeight}">${escapeXml(
-                ln
-              )}</tspan>`
-          )
-          .join("")}
-       </text>`
-    : "";
+  // Bottom scrim for legibility.
+  const grad = ctx.createLinearGradient(0, scrimTop, 0, H);
+  grad.addColorStop(0, "rgba(0,0,0,0)");
+  grad.addColorStop(1, "rgba(0,0,0,0.82)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, scrimTop, W, H - scrimTop);
 
-  let ctaSvg = "";
+  // Headline
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = `${hSize}px ${FONT_FAMILY}`;
+  lines.forEach((ln, i) => {
+    ctx.fillText(ln, cx, blockTop + hSize + i * hLineHeight);
+  });
+
+  // CTA pill
   if (cta) {
-    const ctaY = blockTop + (headline ? hLines.length * hLineHeight + gap : 0);
+    const ctaY = blockTop + lines.length * hLineHeight + gap;
     const ctaX = cx - ctaW / 2;
-    ctaSvg = `
-      <rect x="${ctaX}" y="${ctaY}" width="${ctaW}" height="${ctaH}"
-        rx="${Math.round(ctaH / 2)}" fill="#0F8A60"/>
-      <text x="${cx}" y="${ctaY + ctaH / 2 + ctaSize * 0.36}"
-        text-anchor="middle" font-family="${FONT_FAMILY}"
-        font-size="${ctaSize}" fill="#FFFFFF">
-        ${escapeXml(cta.toUpperCase())}
-      </text>`;
+    const r = ctaH / 2;
+    ctx.fillStyle = "#0F8A60";
+    ctx.beginPath();
+    ctx.moveTo(ctaX + r, ctaY);
+    ctx.arcTo(ctaX + ctaW, ctaY, ctaX + ctaW, ctaY + ctaH, r);
+    ctx.arcTo(ctaX + ctaW, ctaY + ctaH, ctaX, ctaY + ctaH, r);
+    ctx.arcTo(ctaX, ctaY + ctaH, ctaX, ctaY, r);
+    ctx.arcTo(ctaX, ctaY, ctaX + ctaW, ctaY, r);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = `${ctaSize}px ${FONT_FAMILY}`;
+    ctx.fillText(cta, cx, ctaY + ctaH / 2 + ctaSize * 0.34);
   }
 
-  // Font embedded as @font-face base64 — librsvg (Sharp's SVG engine) renders
-  // it with no system-font dependency.
-  const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <style>
-        @font-face {
-          font-family: '${FONT_FAMILY}';
-          src: url(data:font/ttf;base64,${ANTON_TTF_BASE64});
-        }
-      </style>
-      <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
-        <stop offset="100%" stop-color="#000000" stop-opacity="0.78"/>
-      </linearGradient>
-    </defs>
-    <rect x="0" y="${scrimTop}" width="${W}" height="${H - scrimTop}" fill="url(#scrim)"/>
-    ${headlineSvg}
-    ${ctaSvg}
-  </svg>`;
-
-  return img
-    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
-    .jpeg({ quality: 90 })
-    .toBuffer();
+  return await canvas.encode("jpeg", 90);
 }

@@ -8,7 +8,7 @@ const nextConfig = {
   },
   // Native module — keep external so Next doesn't try to bundle the binary.
   experimental: {
-    serverComponentsExternalPackages: ["sharp"],
+    serverComponentsExternalPackages: ["@napi-rs/canvas"],
   },
 };
 
