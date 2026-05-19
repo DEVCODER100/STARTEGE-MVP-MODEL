@@ -1,26 +1,37 @@
+import { Suspense } from "react";
 import LoginForm from "@/components/auth/LoginForm";
 import Link from "next/link";
+import { LogoMark } from "@/components/ui/Logo";
 
 export default function LoginPage() {
   return (
-    <main className="min-h-screen bg-bg-primary flex flex-col items-center justify-center px-5 py-10">
+    <main className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
       <div className="w-full max-w-[400px]">
         <div className="text-center mb-8">
           <Link
             href="/"
-            className="inline-block text-accent text-xl font-medium tracking-tight"
+            className="inline-flex items-center gap-2 justify-center"
           >
-            Stratège
+            <LogoMark size={24} />
+            <span className="font-display text-xl text-text-primary">
+              Stratège
+            </span>
           </Link>
-          <h1 className="text-text-primary text-2xl font-medium mt-6">
+          <h1 className="font-display text-3xl text-text-primary mt-6">
             Welcome back
           </h1>
           <p className="text-text-secondary text-sm mt-2">
-            Sign in to get today&apos;s marketing task
+            Sign in to your marketing co-pilot
           </p>
         </div>
 
-        <LoginForm />
+        <Suspense
+          fallback={
+            <div className="text-text-muted text-sm text-center">Loading…</div>
+          }
+        >
+          <LoginForm />
+        </Suspense>
 
         <p className="text-center text-text-muted text-sm mt-6">
           New here?{" "}

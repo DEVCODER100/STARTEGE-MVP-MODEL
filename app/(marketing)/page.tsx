@@ -120,7 +120,7 @@ export default async function LandingPage() {
               <div className="px-2 py-1.5 text-text-secondary">↑ Upgrade</div>
             </div>
             <div className="p-8 md:p-12">
-              <div className="text-text-muted text-xs">Today's task</div>
+              <div className="text-text-muted text-xs">Today&apos;s task</div>
               <div className="font-display text-2xl text-text-primary mt-2">
                 Post a behind-the-scenes reel of your packing process
               </div>

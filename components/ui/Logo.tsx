@@ -39,17 +39,14 @@ export function LogoMark({
 export default function Logo({
   size = 28,
   textClass = "font-display text-xl text-text-primary",
-  href,
 }: {
   size?: number;
   textClass?: string;
-  href?: string;
 }) {
-  const inner = (
+  return (
     <span className="inline-flex items-center gap-2">
       <LogoMark size={size} />
       <span className={textClass}>Stratège</span>
     </span>
   );
-  return inner;
 }
