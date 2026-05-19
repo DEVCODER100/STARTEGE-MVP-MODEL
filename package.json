@@ -6,21 +6,44 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:setup": "node scripts/db-setup.mjs",
+    "db:ping": "node scripts/db-ping.mjs",
+    "test:claude": "node scripts/test-claude.mjs",
+    "db:migrate:roles": "node scripts/db-migrate-roles.mjs",
+    "db:migrate:chats": "node scripts/db-migrate-chats.mjs",
+    "db:migrate:pivot": "node scripts/db-migrate-pivot.mjs",
+    "db:migrate:auth": "node scripts/db-migrate-auth.mjs",
+    "db:migrate:usage": "node scripts/db-migrate-usage.mjs",
+    "db:migrate:events": "node scripts/db-migrate-events.mjs",
+    "db:migrate:chatimg": "node scripts/db-migrate-chatimg.mjs",
+    "db:migrate:imagemeta": "node scripts/db-migrate-imagemeta.mjs"
   },
   "dependencies": {
+    "@clerk/nextjs": "^5.7.6",
+    "@neondatabase/serverless": "^1.1.0",
+    "@vercel/blob": "^2.4.0",
+    "bcryptjs": "^3.0.3",
+    "cheerio": "^1.2.0",
+    "next": "14.2.35",
+    "next-auth": "^5.0.0-beta.31",
+    "razorpay": "^2.9.6",
     "react": "^18",
     "react-dom": "^18",
-    "next": "14.2.35"
+    "sharp": "^0.34.5",
+    "zod": "^4.4.1"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cheerio": "^0.22.35",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "dotenv": "^17.4.2",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.35"
+    "typescript": "^5"
   }
 }

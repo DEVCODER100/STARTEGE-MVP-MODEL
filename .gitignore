@@ -34,3 +34,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Runtime-generated images (local dev only)
+public/generated/
+
+# Claude agent working files
+.claude/

@@ -2,26 +2,110 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #FFFFFF;
+  color: #1A1A1A;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* Soft warm wash + subtle dot grid (Linear/Notion/Vercel style). */
+body {
+  background-image:
+    radial-gradient(
+      ellipse 60% 40% at 50% -10%,
+      rgba(15, 138, 96, 0.06) 0%,
+      rgba(15, 138, 96, 0) 60%
+    ),
+    radial-gradient(
+      ellipse 30% 25% at 100% 100%,
+      rgba(255, 200, 120, 0.05) 0%,
+      rgba(255, 200, 120, 0) 70%
+    ),
+    radial-gradient(
+      circle,
+      rgba(15, 138, 96, 0.10) 1px,
+      transparent 1px
+    );
+  background-size: auto, auto, 24px 24px;
+  background-attachment: fixed;
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  .font-display {
+    font-family: var(--font-fraunces), ui-serif, Georgia, serif;
+    letter-spacing: -0.02em;
+    font-weight: 500;
   }
+
+  .font-medium {
+    font-weight: 500;
+  }
+
+  .hairline {
+    border-width: 1px;
+    border-color: #E6E6E0;
+  }
+
+  /* Subtle dotted background for canvases */
+  .bg-dots {
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      rgba(26, 26, 26, 0.05) 1px,
+      transparent 0
+    );
+    background-size: 22px 22px;
+  }
+}
+
+::selection {
+  background-color: #0F8A60;
+  color: #FFFFFF;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D4D4CD;
+  border-radius: 9999px;
+  border: 2px solid #FFFFFF;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B5B5AD;
+}
+
+input,
+textarea,
+select {
+  background-color: #FFFFFF;
+  color: #1A1A1A;
+  border: 1px solid #E6E6E0;
+  border-radius: 10px;
+  outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #8A8A82;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #0F8A60;
+  box-shadow: 0 0 0 3px rgba(15, 138, 96, 0.18);
 }
