@@ -1,8 +1,9 @@
 import sharp from "sharp";
 import { Resvg } from "@resvg/resvg-js";
 import { tmpdir } from "node:os";
-import { writeFile } from "node:fs/promises";
+import { writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { ANTON_TTF_BASE64 } from "./font-data";
 
 // Compose a text layer onto an AI-generated (text-free) image.
 // Text is rendered with an EXPLICIT embedded font via resvg — so it works
@@ -14,33 +15,25 @@ export interface OverlayText {
 }
 
 // Anton — a heavy display font, great for ad headlines. Open Font License.
-const FONT_URL =
-  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/anton/Anton-Regular.ttf";
 const FONT_FAMILY = "Anton";
 
-// resvg-js loads fonts from file paths. We fetch the font once and cache it
-// in the OS temp dir (writable on Vercel's Lambda runtime).
+// resvg-js loads fonts from file paths. The font is embedded in the code
+// (font-data.ts) and written once to the OS temp dir (writable on Vercel).
+// No network, no bundled binary, no file-tracing — always works.
 let _fontPath: string | null = null;
 
-async function getFontPath(): Promise<string | null> {
+function getFontPath(): string | null {
   if (_fontPath) return _fontPath;
-  for (let i = 0; i < 2; i++) {
-    try {
-      const res = await fetch(FONT_URL, {
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (res.ok) {
-        const buf = Buffer.from(await res.arrayBuffer());
-        const p = join(tmpdir(), "stratege-anton.ttf");
-        await writeFile(p, buf);
-        _fontPath = p;
-        return p;
-      }
-    } catch {
-      // retry
+  try {
+    const p = join(tmpdir(), "stratege-anton.ttf");
+    if (!existsSync(p)) {
+      writeFileSync(p, Buffer.from(ANTON_TTF_BASE64, "base64"));
     }
+    _fontPath = p;
+    return p;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 function escapeXml(s: string): string {
@@ -162,7 +155,7 @@ export async function compositeText(
   </svg>`;
 
   // Render the SVG (incl. text) to a transparent PNG with an EXPLICIT font.
-  const fontPath = await getFontPath();
+  const fontPath = getFontPath();
   const resvg = new Resvg(svg, {
     fitTo: { mode: "width", value: W },
     font: fontPath
