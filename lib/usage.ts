@@ -9,7 +9,7 @@ export const MVP_LIMITS = {
 } as const;
 
 export const MVP_LIMIT_MESSAGE =
-  "You've hit today's limit. Stratège is an MVP in testing — limits reset tomorrow. Got feedback? That's exactly what we need right now.";
+  "You've reached today's free limit — nice work getting through it. Everything resets tomorrow, so come back then and pick up right where you left off. Limits stay small during early access so every creation comes back fast and reliable for you.";
 
 function today(): string {
   // YYYY-MM-DD in the server's local time. Good enough for MVP.
