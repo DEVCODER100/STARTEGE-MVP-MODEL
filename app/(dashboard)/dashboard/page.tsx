@@ -1,7 +1,6 @@
 import { getOrCreateUser } from "@/lib/users";
 import { getDb } from "@/lib/db";
-import Header from "@/components/dashboard/Header";
-import ChatInterface from "@/components/chat/ChatInterface";
+import DashboardChat from "@/components/dashboard/DashboardChat";
 
 export default async function DashboardPage({
   searchParams,
@@ -39,19 +38,15 @@ export default async function DashboardPage({
       : null;
 
   return (
-    <>
-      <Header />
-      <ChatInterface
-        key={chatId ?? "new"}
-        greeting={
-          <>
-            {greetingWord}, <span className="italic">{firstName}</span>
-          </>
-        }
-        subline="Your AI marketing coach — ask me anything or generate today's task."
-        chips={chips}
-        initialChatId={chatId}
-      />
-    </>
+    <DashboardChat
+      greeting={
+        <>
+          {greetingWord}, <span className="italic">{firstName}</span>
+        </>
+      }
+      subline="Your AI marketing co-pilot — ask anything, plan a campaign, or create posts."
+      chips={chips}
+      initialChatId={chatId}
+    />
   );
 }
