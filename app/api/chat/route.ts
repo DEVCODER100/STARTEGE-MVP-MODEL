@@ -46,13 +46,39 @@ function makeTitle(text: string): string {
   return t.length > 60 ? t.slice(0, 57) + "…" : t;
 }
 
-// Detect when the founder is asking for an image.
+// Fast keyword path: an obvious image request.
 const IMG_NOUN =
-  /\b(image|images|picture|pic|pics|visual|visuals|poster|creative|creatives|graphic|banner|photo|thumbnail|design|artwork|mockup)\b/i;
+  /\b(image|images|picture|pic|pics|visual|visuals|poster|creative|creatives|graphic|banner|photo|thumbnail|artwork|mockup)\b/i;
 const IMG_VERB =
   /\b(make|create|generate|design|need|want|give|build|draw|show|produce)\b/i;
 function isImageRequest(text: string): boolean {
   return IMG_NOUN.test(text) && IMG_VERB.test(text);
+}
+
+// For everything else (e.g. follow-ups like "make another one", "a better
+// version") a tiny Haiku call classifies intent using the conversation.
+async function classifyImageIntent(
+  messages: { role: string; content: string }[]
+): Promise<boolean> {
+  const recent = messages
+    .slice(-6)
+    .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+    .join("\n");
+  try {
+    const r = await chat({
+      model: "haiku",
+      maxTokens: 4,
+      temperature: 0,
+      system: `Decide if the USER's latest message is a request to generate, create, or regenerate a visual IMAGE / picture / poster / graphic / ad creative right now.
+This INCLUDES follow-ups that refer back to a previous image, like "make another one", "create a better version", "a different one", "regenerate it", "make it more professional".
+This does NOT include requests for captions, hooks, scripts, text, ideas, or strategy.
+Reply with exactly one word: IMAGE or TEXT.`,
+      messages: [{ role: "user", content: recent }],
+    });
+    return /image/i.test(r.text);
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(req: Request) {
@@ -128,9 +154,14 @@ export async function POST(req: Request) {
     `;
     const brand = brandRows[0] ?? {};
 
-    const wantsImage = latest ? isImageRequest(latest.content) : false;
+    // Obvious keyword match first (fast); otherwise classify with Haiku so
+    // follow-ups like "make another one" / "a better version" are caught.
+    let wantsImage = latest ? isImageRequest(latest.content) : false;
+    if (!wantsImage && latest) {
+      wantsImage = await classifyImageIntent(messages);
+    }
 
-    // ───── IMAGE PATH (counts toward 5/day) ─────
+    // ───── IMAGE PATH (counts toward the daily image limit) ─────
     if (wantsImage) {
       const allowed = await canGenerateImage(user.id);
       if (!allowed) {
