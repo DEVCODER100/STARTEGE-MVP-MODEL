@@ -22,6 +22,14 @@ export async function storeImage(
     return blob.url;
   }
 
+  // No blob token. On Vercel the filesystem is read-only — fail clearly.
+  if (process.env.VERCEL) {
+    throw new Error(
+      "Image storage is not configured. Add a Vercel Blob store so BLOB_READ_WRITE_TOKEN is set, then redeploy."
+    );
+  }
+
+  // Local dev only.
   const dir = join(process.cwd(), "public", "generated");
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, filename), buffer);
