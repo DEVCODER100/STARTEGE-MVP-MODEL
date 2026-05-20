@@ -1,6 +1,7 @@
 import { createCanvas, loadImage, GlobalFonts } from "@napi-rs/canvas";
 import type { SKRSContext2D } from "@napi-rs/canvas";
 import { MANROPE_B64 } from "./font-data";
+import type { CreativeDirection } from "./creative-direction";
 
 // Compose a designed MARKETING CARD: pastel background, editorial dark
 // headline at the top, optional subhead + CTA, with the AI-generated
@@ -11,6 +12,7 @@ import { MANROPE_B64 } from "./font-data";
 export interface OverlayText {
   headline?: string | null;
   cta?: string | null;
+  direction?: CreativeDirection | null;
 }
 
 const FONT = "Manrope";
@@ -156,6 +158,9 @@ function dropShadow(
 interface Palette {
   bg: string;
   bgEdge: string; // slight gradient edge
+  text?: string;
+  muted?: string;
+  accent?: string;
   pillFill: string;
   pillText: string;
 }
@@ -173,6 +178,39 @@ const PALETTES: Palette[] = [
 type Variant = "card-bottom" | "card-top" | "split-right";
 const VARIANTS: Variant[] = ["card-bottom", "card-bottom", "card-top", "split-right"];
 // "card-bottom" appears twice — most reliable / most reference-like layout.
+
+function resolvePalette(direction?: CreativeDirection | null): Palette {
+  if (!direction) return PALETTES[Math.floor(Math.random() * PALETTES.length)];
+  return {
+    bg: direction.palette.bg,
+    bgEdge: direction.palette.bgEdge,
+    text: direction.palette.text,
+    muted: direction.palette.muted,
+    accent: direction.palette.accent,
+    pillFill: direction.palette.pillFill,
+    pillText: direction.palette.pillText,
+  };
+}
+
+function resolveVariant(direction?: CreativeDirection | null): Variant {
+  if (!direction) return VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
+  switch (direction.layout) {
+    case "split_product":
+    case "hero_device":
+      return "split-right";
+    case "bold_poster":
+    case "social_burst":
+      return "card-top";
+    case "minimal_luxury":
+    case "editorial_card":
+    default:
+      return "card-bottom";
+  }
+}
+
+function headlineColor(pal: Palette) {
+  return pal.text ?? TEXT_DARK;
+}
 
 /** Paint a soft-gradient pastel background. */
 function paintBackground(
@@ -259,7 +297,8 @@ function layoutCardBottom(
   );
 
   const cx = Math.round(W / 2);
-  if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, blockTop, TEXT_DARK);
+  if (headline)
+    drawHeadline(ctx, lines, size, lineHeight, cx, blockTop, headlineColor(pal));
 
   if (cta) {
     const pillY = blockTop + lines.length * lineHeight + ctaGap;
@@ -308,7 +347,8 @@ function layoutCardTop(
 
   drawSubjectImage(ctx, img, imgX, imgY, imgW, imgH, Math.round(W * 0.045));
 
-  if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, textTop, TEXT_DARK);
+  if (headline)
+    drawHeadline(ctx, lines, size, lineHeight, cx, textTop, headlineColor(pal));
 
   if (cta) {
     const pillY = textTop + lines.length * lineHeight + ctaGap;
@@ -361,7 +401,7 @@ function layoutSplitRight(
   drawSubjectImage(ctx, img, imgX, imgY, imgW, imgH, Math.round(W * 0.045));
 
   if (headline)
-    drawHeadline(ctx, lines, size, lineHeight, textX, blockTop, TEXT_DARK, "left");
+    drawHeadline(ctx, lines, size, lineHeight, textX, blockTop, headlineColor(pal), "left");
 
   if (cta) {
     const pillY = blockTop + lines.length * lineHeight + ctaGap;
@@ -392,7 +432,8 @@ export async function compositeText(
 
   const headline = (text.headline ?? "").trim();
   const cta = (text.cta ?? "").trim().toUpperCase();
-  const pal = PALETTES[Math.floor(Math.random() * PALETTES.length)];
+  const direction = text.direction ?? null;
+  const pal = resolvePalette(direction);
 
   // If there's no text at all just paint the background and place the image full-bleed.
   if (!headline && !cta) {
@@ -402,7 +443,7 @@ export async function compositeText(
     return await canvas.encode("jpeg", 92);
   }
 
-  const variant = VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
+  const variant = resolveVariant(direction);
   switch (variant) {
     case "card-top":
       layoutCardTop(ctx, img, W, H, headline, cta, pal);

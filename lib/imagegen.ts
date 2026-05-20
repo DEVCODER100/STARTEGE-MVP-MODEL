@@ -2,26 +2,26 @@ import { planImage } from "./imageplan";
 import { generateImages } from "./ideogram";
 import { loadImageBuffer, storeImage } from "./storage";
 import { compositeText } from "./overlay";
+import type { CreativeDirection } from "./creative-direction";
 
 // Full image pipeline:
-//   1. Claude plans a TEXT-FREE scene + the overlay text (separately).
-//   2. Ideogram generates a clean, text-free image.
-//   3. Sharp composites perfect SVG text on top.
-//   4. Store both the base (for re-editing) and the final image.
+//   1. Claude plans a startup-aware, text-free visual scene + overlay text.
+//   2. Ideogram generates a clean visual subject with no text.
+//   3. Canvas composites a controlled marketing-card layout.
+//   4. Store both base image (for re-editing) and final output.
 
 export interface GeneratedImage {
-  url: string; // final composited image (perfect text)
-  baseUrl: string; // text-free base (used to re-overlay edited text)
+  url: string;
+  baseUrl: string;
   headline: string;
   cta: string;
-  fallback: boolean; // true if Ideogram fell back to a placeholder
+  direction: CreativeDirection;
+  fallback: boolean;
 }
 
 export async function generateMarketingImage(
   brand: Record<string, unknown>,
   request: string,
-  // When the user explicitly chose a headline/CTA, it is used VERBATIM —
-  // the AI never rewrites it.
   forced?: { headline?: string; cta?: string }
 ): Promise<GeneratedImage> {
   const plan = await planImage(brand, request);
@@ -34,16 +34,26 @@ export async function generateMarketingImage(
   const cta =
     forced?.cta && forced.cta.trim() ? forced.cta.trim() : plan.cta;
 
-  // We composite this image INTO a designed marketing card (Notion/Stripe
-  // style) — so we want a square subject crop with a clean composition that
-  // works as a self-contained visual element, not a full-bleed background.
   const ideoPrompt = `${plan.scene_prompt}
 
-COMPOSITION: a single square subject image with a clean, well-lit, well-composed scene. The subject is centered and clearly the focal point. The surroundings should feel premium and uncluttered (soft backgrounds, natural light, intentional negative space). Think editorial product / lifestyle photography.
+STARTUP CONTEXT:
+Product: ${String(brand.product ?? "the product")}
+Audience: ${String(brand.target_audience ?? "the target audience")}
+Industry: ${String(brand.industry ?? "startup / SaaS")}
+Positioning: ${String(brand.usp ?? brand.goal ?? "clear value")}
+
+CREATIVE DIRECTION:
+Style: ${plan.direction.style}
+Platform: ${plan.direction.platform}
+Energy: ${plan.direction.energy}
+Image treatment: ${plan.direction.imageTreatment}
+Subject direction: ${plan.direction.subjectHint}
+
+COMPOSITION: a single square subject image. Make the visual identity specific to the product category and audience above. Do NOT reuse a generic founder/person-at-laptop scene unless it truly fits the product. Prefer product UI, device mockups, product object, lifestyle use-case, abstract 3D system, or editorial scene depending on the creative direction.
 
 ABSOLUTELY NO TEXT IN THE IMAGE: zero words, zero letters, zero numbers, no signs, no labels, no captions, no watermark. Purely visual.
 
-STYLE: modern, premium, editorial — Notion, Stripe, Linear aesthetic. Real photography or clean 3D, never cluttered.
+STYLE: follow the creative direction exactly. Real photography or clean 3D, never cluttered.
 QUALITY: ultra high quality.`;
 
   const imgs = await generateImages({
@@ -52,24 +62,27 @@ QUALITY: ultra high quality.`;
     aspectRatio: "ASPECT_1_1",
   });
 
-  // Fetch the Ideogram image, store our own copy of the base (Ideogram URLs
-  // expire), then overlay text.
   const baseBuf = await loadImageBuffer(imgs.urls[0]);
   const baseUrl = await storeImage(baseBuf, "jpg");
 
-  const finalBuf = await compositeText(baseBuf, { headline, cta });
+  const finalBuf = await compositeText(baseBuf, {
+    headline,
+    cta,
+    direction: plan.direction,
+  });
   const url = await storeImage(finalBuf, "jpg");
 
-  return { url, baseUrl, headline, cta, fallback: imgs.fallback };
+  return { url, baseUrl, headline, cta, direction: plan.direction, fallback: imgs.fallback };
 }
 
 /** Re-render the text overlay on an existing base image (instant edit). */
 export async function reoverlayImage(
   baseUrl: string,
   headline: string,
-  cta: string
+  cta: string,
+  direction?: CreativeDirection | null
 ): Promise<string> {
   const baseBuf = await loadImageBuffer(baseUrl);
-  const finalBuf = await compositeText(baseBuf, { headline, cta });
+  const finalBuf = await compositeText(baseBuf, { headline, cta, direction });
   return storeImage(finalBuf, "jpg");
 }

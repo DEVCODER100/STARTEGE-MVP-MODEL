@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     const sql = getDb();
     // Verify the message belongs to a chat owned by this user.
     const owned = await sql`
-      SELECT m.id
+      SELECT m.id, m.image_meta
       FROM chat_messages m
       JOIN chats c ON c.id = m.chat_id
       WHERE m.id = ${messageId} AND c.user_id = ${user.id}
@@ -42,12 +42,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const url = await reoverlayImage(baseUrl, headline.trim(), cta.trim());
+    const previousMeta = (owned[0]?.image_meta ?? {}) as {
+      direction?: unknown;
+    };
+    const url = await reoverlayImage(
+      baseUrl,
+      headline.trim(),
+      cta.trim(),
+      previousMeta.direction as never
+    );
 
     const meta = JSON.stringify({
       baseUrl,
       headline: headline.trim(),
       cta: cta.trim(),
+      direction: previousMeta.direction ?? null,
     });
     await sql`
       UPDATE chat_messages

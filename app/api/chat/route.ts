@@ -201,6 +201,7 @@ export async function POST(req: Request) {
         baseUrl: result.baseUrl,
         headline: result.headline,
         cta: result.cta,
+        direction: result.direction,
       };
 
       const inserted = await sql`
