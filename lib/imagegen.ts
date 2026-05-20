@@ -34,15 +34,22 @@ export async function generateMarketingImage(
   const cta =
     forced?.cta && forced.cta.trim() ? forced.cta.trim() : plan.cta;
 
+  // We composite this image INTO a designed marketing card (Notion/Stripe
+  // style) — so we want a square subject crop with a clean composition that
+  // works as a self-contained visual element, not a full-bleed background.
   const ideoPrompt = `${plan.scene_prompt}
 
-ABSOLUTELY NO TEXT IN THE IMAGE: zero words, zero letters, zero numbers, no signs, no labels, no captions, no watermark. A purely visual scene only.
-STYLE: professional, modern, ad-ready. QUALITY: ultra high quality.`;
+COMPOSITION: a single square subject image with a clean, well-lit, well-composed scene. The subject is centered and clearly the focal point. The surroundings should feel premium and uncluttered (soft backgrounds, natural light, intentional negative space). Think editorial product / lifestyle photography.
+
+ABSOLUTELY NO TEXT IN THE IMAGE: zero words, zero letters, zero numbers, no signs, no labels, no captions, no watermark. Purely visual.
+
+STYLE: modern, premium, editorial — Notion, Stripe, Linear aesthetic. Real photography or clean 3D, never cluttered.
+QUALITY: ultra high quality.`;
 
   const imgs = await generateImages({
     prompt: ideoPrompt,
     count: 1,
-    aspectRatio: "ASPECT_4_5",
+    aspectRatio: "ASPECT_1_1",
   });
 
   // Fetch the Ideogram image, store our own copy of the base (Ideogram URLs

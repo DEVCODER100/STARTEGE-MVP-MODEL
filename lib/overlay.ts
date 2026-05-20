@@ -1,37 +1,39 @@
 import { createCanvas, loadImage, GlobalFonts } from "@napi-rs/canvas";
 import type { SKRSContext2D } from "@napi-rs/canvas";
-import { ANTON_TTF_BASE64 } from "./font-data";
+import { MANROPE_B64 } from "./font-data";
 
-// Compose a text layer onto an AI-generated (text-free) image.
-// Text is drawn with @napi-rs/canvas using a font registered directly from
-// an in-memory buffer — no SVG, no system fonts, no files. Renders
-// identically on any machine, including Vercel's Linux runtime.
+// Compose a designed MARKETING CARD: pastel background, editorial dark
+// headline at the top, optional subhead + CTA, with the AI-generated
+// subject image contained inside a rounded card in the lower portion.
+// Notion / Stripe / clean-SaaS aesthetic — never a photo with text slapped
+// across it.
 
 export interface OverlayText {
   headline?: string | null;
   cta?: string | null;
 }
 
-const FONT_FAMILY = "Anton"; // heavy display font — ideal for ad headlines
+const FONT = "Manrope";
 const ACCENT = "#0F8A60";
+const TEXT_DARK = "#141414";
+const TEXT_MUTED = "#5C5C57";
 
 let _registered = false;
 function ensureFont() {
   if (_registered) return;
-  GlobalFonts.register(Buffer.from(ANTON_TTF_BASE64, "base64"), FONT_FAMILY);
+  GlobalFonts.register(Buffer.from(MANROPE_B64, "base64"), FONT);
   _registered = true;
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────
 
-/** Word-wrap using real measured text width. */
 function wrap(
   ctx: SKRSContext2D,
   text: string,
   fontPx: number,
   maxWidth: number
 ): string[] {
-  ctx.font = `${fontPx}px ${FONT_FAMILY}`;
+  ctx.font = `${fontPx}px ${FONT}`;
   const words = text.replace(/\s+/g, " ").trim().split(" ");
   const lines: string[] = [];
   let line = "";
@@ -48,7 +50,6 @@ function wrap(
   return lines;
 }
 
-/** Pick a headline font size that fits in <= maxLines lines. */
 function fitHeadline(
   ctx: SKRSContext2D,
   text: string,
@@ -63,47 +64,56 @@ function fitHeadline(
     size -= 4;
     lines = wrap(ctx, text, size, maxWidth);
   }
-  return { size, lines, lineHeight: Math.round(size * 1.14) };
+  return { size, lines, lineHeight: Math.round(size * 1.12) };
 }
 
-/** Draw a teal pill containing the CTA text. Returns the pill bounding box. */
+/** Draw a rounded-rect path (no fill yet). */
+function roundedRectPath(
+  ctx: SKRSContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+/** Draw a CTA pill. */
 function drawPill(
   ctx: SKRSContext2D,
-  cx: number, // center anchor X (or left anchor if align="left")
+  cx: number,
   topY: number,
   text: string,
   fontPx: number,
+  fill: string,
+  textColor: string,
   align: "center" | "left" = "center"
 ) {
-  ctx.font = `${fontPx}px ${FONT_FAMILY}`;
+  ctx.font = `${fontPx}px ${FONT}`;
   const tw = ctx.measureText(text).width;
-  const padX = Math.round(fontPx * 1.05);
+  const padX = Math.round(fontPx * 1.1);
   const padY = Math.round(fontPx * 0.55);
   const w = Math.round(tw) + padX * 2;
   const h = fontPx + padY * 2;
   const x = align === "center" ? cx - w / 2 : cx;
-  const r = h / 2;
-
-  ctx.fillStyle = ACCENT;
-  ctx.beginPath();
-  ctx.moveTo(x + r, topY);
-  ctx.arcTo(x + w, topY, x + w, topY + h, r);
-  ctx.arcTo(x + w, topY + h, x, topY + h, r);
-  ctx.arcTo(x, topY + h, x, topY, r);
-  ctx.arcTo(x, topY, x + w, topY, r);
-  ctx.closePath();
+  ctx.fillStyle = fill;
+  roundedRectPath(ctx, x, topY, w, h, h / 2);
   ctx.fill();
-
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = textColor;
   ctx.textAlign = align === "center" ? "center" : "left";
   ctx.textBaseline = "alphabetic";
   const textX = align === "center" ? cx : x + padX;
   ctx.fillText(text, textX, topY + h / 2 + fontPx * 0.34);
-
-  return { w, h };
 }
 
-/** Draw a multi-line headline. */
 function drawHeadline(
   ctx: SKRSContext2D,
   lines: string[],
@@ -111,10 +121,11 @@ function drawHeadline(
   lineHeight: number,
   x: number,
   topY: number,
+  color: string,
   align: "center" | "left" = "center"
 ) {
-  ctx.fillStyle = "#FFFFFF";
-  ctx.font = `${size}px ${FONT_FAMILY}`;
+  ctx.fillStyle = color;
+  ctx.font = `${size}px ${FONT}`;
   ctx.textAlign = align;
   ctx.textBaseline = "alphabetic";
   lines.forEach((ln, i) => {
@@ -122,182 +133,248 @@ function drawHeadline(
   });
 }
 
+/** Draw a soft shadow behind a rounded card region (cheap blur via stacked rects). */
+function dropShadow(
+  ctx: SKRSContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  ctx.save();
+  ctx.fillStyle = "rgba(20,20,20,0.10)";
+  roundedRectPath(ctx, x - 2, y + 8, w + 4, h + 4, r);
+  ctx.fill();
+  ctx.fillStyle = "rgba(20,20,20,0.06)";
+  roundedRectPath(ctx, x - 6, y + 18, w + 12, h + 12, r + 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// ─── palettes (background + accent shades) ───────────────────────────────
+
+interface Palette {
+  bg: string;
+  bgEdge: string; // slight gradient edge
+  pillFill: string;
+  pillText: string;
+}
+const PALETTES: Palette[] = [
+  { bg: "#FBF6EF", bgEdge: "#F6E9D6", pillFill: "#141414", pillText: "#FFFFFF" }, // warm cream
+  { bg: "#F4F1FB", bgEdge: "#E7DEFB", pillFill: ACCENT, pillText: "#FFFFFF" }, // soft lavender
+  { bg: "#F0F4F0", bgEdge: "#DDEBE2", pillFill: ACCENT, pillText: "#FFFFFF" }, // soft mint
+  { bg: "#FCF1ED", bgEdge: "#F8D9C8", pillFill: "#141414", pillText: "#FFFFFF" }, // peach
+  { bg: "#F2F4F7", bgEdge: "#DCE3EB", pillFill: ACCENT, pillText: "#FFFFFF" }, // cool gray
+  { bg: "#FFF8E7", bgEdge: "#FBEABF", pillFill: "#141414", pillText: "#FFFFFF" }, // pale yellow
+];
+
 // ─── layout variants ──────────────────────────────────────────────────────
 
-type Variant = "bottom" | "top" | "band" | "left";
-const VARIANTS: Variant[] = ["bottom", "top", "band", "left"];
+type Variant = "card-bottom" | "card-top" | "split-right";
+const VARIANTS: Variant[] = ["card-bottom", "card-bottom", "card-top", "split-right"];
+// "card-bottom" appears twice — most reliable / most reference-like layout.
 
-// 1) Bottom: bottom-scrim + centered headline + pill below.
-function drawBottom(
+/** Paint a soft-gradient pastel background. */
+function paintBackground(
   ctx: SKRSContext2D,
   W: number,
   H: number,
-  headline: string,
-  cta: string
+  pal: Palette
 ) {
-  const margin = Math.round(W * 0.07);
-  const maxW = W - margin * 2;
-  const { size, lines, lineHeight } = fitHeadline(
-    ctx,
-    headline,
-    Math.round(W * 0.082),
-    Math.round(W * 0.046),
-    maxW
-  );
-
-  const ctaSize = Math.round(W * 0.042);
-  const ctaH = ctaSize + Math.round(ctaSize * 0.55) * 2;
-  const gap = cta ? Math.round(W * 0.045) : 0;
-  const blockH =
-    (headline ? lines.length * lineHeight : 0) + (cta ? ctaH + gap : 0);
-
-  const bottomMargin = Math.round(W * 0.085);
-  const blockTop = H - bottomMargin - blockH;
-  const scrimTop = Math.max(0, blockTop - Math.round(H * 0.16));
-  const cx = Math.round(W / 2);
-
-  const g = ctx.createLinearGradient(0, scrimTop, 0, H);
-  g.addColorStop(0, "rgba(0,0,0,0)");
-  g.addColorStop(1, "rgba(0,0,0,0.82)");
+  const g = ctx.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, pal.bg);
+  g.addColorStop(1, pal.bgEdge);
   ctx.fillStyle = g;
-  ctx.fillRect(0, scrimTop, W, H - scrimTop);
-
-  if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, blockTop);
-  if (cta) {
-    const pillY = blockTop + (headline ? lines.length * lineHeight + gap : 0);
-    drawPill(ctx, cx, pillY, cta, ctaSize);
-  }
+  ctx.fillRect(0, 0, W, H);
 }
 
-// 2) Top: top-scrim + centered headline near the top.
-function drawTop(
+/** Draw a contained subject image inside a rounded rect (cover-fit). */
+function drawSubjectImage(
   ctx: SKRSContext2D,
-  W: number,
-  H: number,
-  headline: string,
-  cta: string
+  img: Awaited<ReturnType<typeof loadImage>>,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
 ) {
-  const margin = Math.round(W * 0.07);
-  const maxW = W - margin * 2;
-  const { size, lines, lineHeight } = fitHeadline(
-    ctx,
-    headline,
-    Math.round(W * 0.082),
-    Math.round(W * 0.046),
-    maxW
-  );
-
-  const ctaSize = Math.round(W * 0.042);
-  const ctaH = ctaSize + Math.round(ctaSize * 0.55) * 2;
-  const gap = cta ? Math.round(W * 0.045) : 0;
-  const blockH =
-    (headline ? lines.length * lineHeight : 0) + (cta ? ctaH + gap : 0);
-
-  const topMargin = Math.round(W * 0.1);
-  const blockTop = topMargin;
-  const scrimBottom = Math.min(H, blockTop + blockH + Math.round(H * 0.1));
-  const cx = Math.round(W / 2);
-
-  const g = ctx.createLinearGradient(0, 0, 0, scrimBottom);
-  g.addColorStop(0, "rgba(0,0,0,0.82)");
-  g.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, scrimBottom);
-
-  if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, blockTop);
-  if (cta) {
-    const pillY = blockTop + (headline ? lines.length * lineHeight + gap : 0);
-    drawPill(ctx, cx, pillY, cta, ctaSize);
-  }
+  dropShadow(ctx, x, y, w, h, r);
+  ctx.save();
+  roundedRectPath(ctx, x, y, w, h, r);
+  ctx.clip();
+  // cover-fit: scale to fill area, center-crop
+  const srcW = img.width;
+  const srcH = img.height;
+  const scale = Math.max(w / srcW, h / srcH);
+  const dW = srcW * scale;
+  const dH = srcH * scale;
+  const dx = x + (w - dW) / 2;
+  const dy = y + (h - dH) / 2;
+  ctx.drawImage(img, dx, dy, dW, dH);
+  ctx.restore();
 }
 
-// 3) Band: a solid dark band horizontally across (slightly above center).
-function drawBand(
+// Variant A: headline + subhead top; image as a big rounded card bottom-center.
+function layoutCardBottom(
   ctx: SKRSContext2D,
+  img: Awaited<ReturnType<typeof loadImage>>,
   W: number,
   H: number,
   headline: string,
-  cta: string
+  cta: string,
+  pal: Palette
 ) {
-  const margin = Math.round(W * 0.07);
-  const maxW = W - margin * 2;
+  paintBackground(ctx, W, H, pal);
+
+  const margin = Math.round(W * 0.085);
+  const maxTextW = W - margin * 2;
+
+  // Image card sits in the lower portion. Reserve ~52% of H for the image area.
+  const imgH = Math.round(H * 0.52);
+  const imgW = W - margin * 2;
+  const imgX = margin;
+  const imgY = H - margin - imgH;
+
+  // Headline sized to fit nicely above the image card.
+  const topArea = imgY - margin;
   const { size, lines, lineHeight } = fitHeadline(
     ctx,
     headline,
-    Math.round(W * 0.088),
+    Math.round(W * 0.085),
     Math.round(W * 0.05),
-    maxW,
+    maxTextW,
     3
   );
 
-  const ctaSize = Math.round(W * 0.042);
+  // Sub-CTA pill is optional; place between headline and image if present.
+  const ctaSize = Math.round(W * 0.038);
   const ctaH = ctaSize + Math.round(ctaSize * 0.55) * 2;
-  const gap = cta ? Math.round(W * 0.045) : 0;
-  const blockH =
-    (headline ? lines.length * lineHeight : 0) + (cta ? ctaH + gap : 0);
+  const ctaGap = cta ? Math.round(W * 0.04) : 0;
 
-  const bandPadV = Math.round(H * 0.055);
-  const bandH = blockH + bandPadV * 2;
-  const bandTop = Math.round(H * 0.52) - bandH / 2;
+  const blockH = lines.length * lineHeight + (cta ? ctaH + ctaGap : 0);
+  // Vertically center the text block in the top area.
+  const blockTop = Math.max(
+    Math.round(W * 0.11),
+    Math.round((topArea - blockH) / 2)
+  );
+
   const cx = Math.round(W / 2);
+  if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, blockTop, TEXT_DARK);
 
-  ctx.fillStyle = "rgba(0,0,0,0.78)";
-  ctx.fillRect(0, bandTop, W, bandH);
-
-  const blockTop = bandTop + bandPadV;
-  if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, blockTop);
   if (cta) {
-    const pillY = blockTop + (headline ? lines.length * lineHeight + gap : 0);
-    drawPill(ctx, cx, pillY, cta, ctaSize);
+    const pillY = blockTop + lines.length * lineHeight + ctaGap;
+    drawPill(ctx, cx, pillY, cta, ctaSize, pal.pillFill, pal.pillText);
   }
+
+  drawSubjectImage(ctx, img, imgX, imgY, imgW, imgH, Math.round(W * 0.045));
 }
 
-// 4) Left: vertical gradient on the left + left-aligned headline.
-function drawLeft(
+// Variant B: image card on TOP; text on the bottom (inverted).
+function layoutCardTop(
   ctx: SKRSContext2D,
+  img: Awaited<ReturnType<typeof loadImage>>,
   W: number,
   H: number,
   headline: string,
-  cta: string
+  cta: string,
+  pal: Palette
 ) {
-  const margin = Math.round(W * 0.07);
-  const maxW = Math.round(W * 0.5);
+  paintBackground(ctx, W, H, pal);
+
+  const margin = Math.round(W * 0.085);
+  const maxTextW = W - margin * 2;
+
+  const imgH = Math.round(H * 0.5);
+  const imgW = W - margin * 2;
+  const imgX = margin;
+  const imgY = margin;
+
   const { size, lines, lineHeight } = fitHeadline(
     ctx,
     headline,
-    Math.round(W * 0.07),
-    Math.round(W * 0.044),
-    maxW,
-    5
+    Math.round(W * 0.082),
+    Math.round(W * 0.048),
+    maxTextW,
+    3
   );
 
-  const ctaSize = Math.round(W * 0.04);
+  const ctaSize = Math.round(W * 0.038);
   const ctaH = ctaSize + Math.round(ctaSize * 0.55) * 2;
-  const gap = cta ? Math.round(W * 0.04) : 0;
-  const blockH =
-    (headline ? lines.length * lineHeight : 0) + (cta ? ctaH + gap : 0);
+  const ctaGap = cta ? Math.round(W * 0.04) : 0;
+  const blockH = lines.length * lineHeight + (cta ? ctaH + ctaGap : 0);
 
-  const blockTop = Math.round(H / 2 - blockH / 2);
+  const textTop = imgY + imgH + Math.round(W * 0.07);
+  const cx = Math.round(W / 2);
 
-  const g = ctx.createLinearGradient(0, 0, Math.round(W * 0.75), 0);
-  g.addColorStop(0, "rgba(0,0,0,0.85)");
-  g.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, Math.round(W * 0.75), H);
+  drawSubjectImage(ctx, img, imgX, imgY, imgW, imgH, Math.round(W * 0.045));
+
+  if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, textTop, TEXT_DARK);
+
+  if (cta) {
+    const pillY = textTop + lines.length * lineHeight + ctaGap;
+    drawPill(ctx, cx, pillY, cta, ctaSize, pal.pillFill, pal.pillText);
+  }
+  // Silence unused-warning in case blockH ever drifts unused
+  void blockH;
+}
+
+// Variant C: text on LEFT, image as card on RIGHT (Stripe-style).
+function layoutSplitRight(
+  ctx: SKRSContext2D,
+  img: Awaited<ReturnType<typeof loadImage>>,
+  W: number,
+  H: number,
+  headline: string,
+  cta: string,
+  pal: Palette
+) {
+  paintBackground(ctx, W, H, pal);
+
+  const margin = Math.round(W * 0.075);
+
+  // Right-side image card occupies roughly the right 48% of width, full inner height.
+  const imgW = Math.round(W * 0.48);
+  const imgH = Math.round(H - margin * 2);
+  const imgX = W - margin - imgW;
+  const imgY = margin;
+
+  // Left text column.
+  const textX = margin;
+  const textColW = imgX - margin - Math.round(W * 0.035);
+
+  const { size, lines, lineHeight } = fitHeadline(
+    ctx,
+    headline,
+    Math.round(W * 0.075),
+    Math.round(W * 0.046),
+    textColW,
+    6
+  );
+
+  const ctaSize = Math.round(W * 0.036);
+  const ctaH = ctaSize + Math.round(ctaSize * 0.55) * 2;
+  const ctaGap = cta ? Math.round(W * 0.04) : 0;
+  const blockH = lines.length * lineHeight + (cta ? ctaH + ctaGap : 0);
+
+  const blockTop = Math.round((H - blockH) / 2);
+
+  drawSubjectImage(ctx, img, imgX, imgY, imgW, imgH, Math.round(W * 0.045));
 
   if (headline)
-    drawHeadline(ctx, lines, size, lineHeight, margin, blockTop, "left");
+    drawHeadline(ctx, lines, size, lineHeight, textX, blockTop, TEXT_DARK, "left");
+
   if (cta) {
-    const pillY = blockTop + (headline ? lines.length * lineHeight + gap : 0);
-    drawPill(ctx, margin, pillY, cta, ctaSize, "left");
+    const pillY = blockTop + lines.length * lineHeight + ctaGap;
+    drawPill(ctx, textX, pillY, cta, ctaSize, pal.pillFill, pal.pillText, "left");
   }
 }
 
 // ─── public API ───────────────────────────────────────────────────────────
 
 /**
- * Returns a JPEG buffer = base image + headline + optional CTA pill.
- * A layout variant is picked at random so every generation looks distinct.
+ * Returns a JPEG buffer of a designed marketing card.
+ * Each call picks a random palette + layout variant for visual variety.
  */
 export async function compositeText(
   baseImage: Buffer,
@@ -306,35 +383,39 @@ export async function compositeText(
   ensureFont();
 
   const img = await loadImage(baseImage);
-  const W = img.width;
-  const H = img.height;
+
+  // Canvas is fixed 1080x1350 (Instagram portrait) so the marketing-card
+  // design is consistent regardless of source-image aspect.
+  const W = 1080;
+  const H = 1350;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0, W, H);
 
   const headline = (text.headline ?? "").trim();
   const cta = (text.cta ?? "").trim().toUpperCase();
+  const pal = PALETTES[Math.floor(Math.random() * PALETTES.length)];
 
+  // If there's no text at all just paint the background and place the image full-bleed.
   if (!headline && !cta) {
-    return await canvas.encode("jpeg", 90);
+    paintBackground(ctx, W, H, pal);
+    const m = Math.round(W * 0.06);
+    drawSubjectImage(ctx, img, m, m, W - m * 2, H - m * 2, Math.round(W * 0.04));
+    return await canvas.encode("jpeg", 92);
   }
 
-  const variant: Variant = VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
+  const variant = VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
   switch (variant) {
-    case "top":
-      drawTop(ctx, W, H, headline, cta);
+    case "card-top":
+      layoutCardTop(ctx, img, W, H, headline, cta, pal);
       break;
-    case "band":
-      drawBand(ctx, W, H, headline, cta);
+    case "split-right":
+      layoutSplitRight(ctx, img, W, H, headline, cta, pal);
       break;
-    case "left":
-      drawLeft(ctx, W, H, headline, cta);
-      break;
-    case "bottom":
+    case "card-bottom":
     default:
-      drawBottom(ctx, W, H, headline, cta);
+      layoutCardBottom(ctx, img, W, H, headline, cta, pal);
       break;
   }
 
-  return await canvas.encode("jpeg", 90);
+  return await canvas.encode("jpeg", 92);
 }
