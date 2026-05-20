@@ -16,7 +16,6 @@ export interface OverlayText {
 const FONT = "Manrope";
 const ACCENT = "#0F8A60";
 const TEXT_DARK = "#141414";
-const TEXT_MUTED = "#5C5C57";
 
 let _registered = false;
 function ensureFont() {
