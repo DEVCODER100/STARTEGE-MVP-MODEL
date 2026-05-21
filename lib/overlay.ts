@@ -176,8 +176,6 @@ const PALETTES: Palette[] = [
 // ─── layout variants ──────────────────────────────────────────────────────
 
 type Variant = "card-bottom" | "card-top" | "split-right";
-const VARIANTS: Variant[] = ["card-bottom", "card-bottom", "card-top", "split-right"];
-// "card-bottom" appears twice — most reliable / most reference-like layout.
 
 function resolvePalette(direction?: CreativeDirection | null): Palette {
   if (!direction) return PALETTES[Math.floor(Math.random() * PALETTES.length)];
