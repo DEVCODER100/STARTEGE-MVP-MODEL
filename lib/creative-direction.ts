@@ -162,6 +162,9 @@ export function detectPlatform(input: string, brand: Record<string, unknown>): C
   return "instagram";
 }
 
+// Styles whose identity is intentionally dark.
+const DARK_STYLES = new Set<VisualStyle>(["bold", "dark_mode", "futuristic"]);
+
 export function makeCreativeDirection(
   brand: Record<string, unknown>,
   request: string,
@@ -173,16 +176,126 @@ export function makeCreativeDirection(
   const styleBase = styleProfiles[style];
   const platformBase = platformProfiles[platform];
 
+  // If the brand has real colors (from onboarding / scrape), build the palette
+  // around THEM so two brands of the same style still look different.
+  const brandAccent = resolveBrandColor(String(brand.brand_colors ?? ""));
+  const palette = brandAccent
+    ? paletteFromAccent(brandAccent, DARK_STYLES.has(style))
+    : styleBase.palette;
+
   return {
     style,
     platform,
     layout: platformBase.preferredLayout ?? styleBase.layout,
-    palette: styleBase.palette,
+    palette,
     typography: platformBase.typography ?? styleBase.typography,
     energy: styleBase.energy,
     imageTreatment: styleBase.imageTreatment,
     subjectHint: styleBase.subjectHint,
   };
+}
+
+// ─── brand-color → palette ────────────────────────────────────────────────
+
+const NAMED_COLORS: Record<string, string> = {
+  black: "#141414",
+  white: "#141414", // "black and white" brands → use dark accent on light bg
+  gray: "#4B5563",
+  grey: "#4B5563",
+  slate: "#334155",
+  red: "#E0342B",
+  crimson: "#DC143C",
+  orange: "#F97316",
+  amber: "#F59E0B",
+  yellow: "#E0A500",
+  lime: "#65A30D",
+  green: "#16A34A",
+  emerald: "#0F8A60",
+  teal: "#0F8A60",
+  cyan: "#0891B2",
+  sky: "#0EA5E9",
+  blue: "#2563EB",
+  indigo: "#635BFF",
+  violet: "#7C3AED",
+  purple: "#7C3AED",
+  magenta: "#C026D3",
+  pink: "#EC4899",
+  rose: "#E11D48",
+  gold: "#A5793D",
+  bronze: "#A5793D",
+  brown: "#8B5E3C",
+  navy: "#1E3A8A",
+};
+
+/** Pull a usable hex accent out of a free-text brand-colors string. */
+export function resolveBrandColor(raw: string): string | null {
+  if (!raw) return null;
+  const hex = raw.match(/#([0-9a-f]{6}|[0-9a-f]{3})\b/i);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3)
+      h = h
+        .split("")
+        .map((c) => c + c)
+        .join("");
+    return `#${h.toUpperCase()}`;
+  }
+  const lower = raw.toLowerCase();
+  for (const [name, value] of Object.entries(NAMED_COLORS)) {
+    if (new RegExp(`\\b${name}\\b`).test(lower)) return value;
+  }
+  return null;
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ];
+}
+function toHex(n: number): string {
+  return Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+}
+function mix(hex: string, target: string, t: number): string {
+  const [r1, g1, b1] = hexToRgb(hex);
+  const [r2, g2, b2] = hexToRgb(target);
+  return `#${toHex(r1 + (r2 - r1) * t)}${toHex(g1 + (g2 - g1) * t)}${toHex(
+    b1 + (b2 - b1) * t
+  )}`.toUpperCase();
+}
+function luminance(hex: string): number {
+  const [r, g, b] = hexToRgb(hex);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+/** Build a full palette around a brand accent color. */
+export function paletteFromAccent(accent: string, dark: boolean) {
+  if (dark) {
+    return palette(
+      mix(accent, "#000000", 0.88),
+      mix(accent, "#000000", 0.74),
+      "#FFFFFF",
+      "#B6B6B6",
+      accent,
+      accent,
+      "#0A0A0A"
+    );
+  }
+  // Light editorial palette tinted by the brand color.
+  const lum = luminance(accent);
+  // If the accent is very light, darken it so the pill/headline stay readable.
+  const usableAccent = lum > 0.62 ? mix(accent, "#000000", 0.4) : accent;
+  return palette(
+    mix(accent, "#FFFFFF", 0.93),
+    mix(accent, "#FFFFFF", 0.8),
+    "#141414",
+    "#6A6A6A",
+    usableAccent,
+    usableAccent,
+    "#FFFFFF"
+  );
 }
 
 const styleProfiles: Record<
