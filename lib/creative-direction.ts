@@ -104,6 +104,20 @@ const PLATFORM_ALIASES: Array<[CreativePlatform, RegExp]> = [
   ["website", /\b(website|landing page|hero)\b/i],
 ];
 
+/** Match a style ONLY from explicit text (no defaults). Null if nothing matches. */
+export function styleFromText(text: string): VisualStyle | null {
+  if (!text) return null;
+  for (const [style, rx] of STYLE_ALIASES) {
+    if (rx.test(text)) return style;
+  }
+  return null;
+}
+
+/** True if `key` is a valid visual style id. */
+export function isVisualStyle(key: string): key is VisualStyle {
+  return key in STYLE_LABELS;
+}
+
 export function detectStyle(input: string, brand: Record<string, unknown>): VisualStyle {
   const blob = [
     input,

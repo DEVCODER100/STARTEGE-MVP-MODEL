@@ -1,9 +1,13 @@
 import { chat } from "./claude";
 import {
   makeCreativeDirection,
+  detectPlatform,
+  styleFromText,
+  isVisualStyle,
   PLATFORM_LABELS,
   STYLE_LABELS,
   type CreativeDirection,
+  type VisualStyle,
 } from "./creative-direction";
 
 // Stage 1 of image generation: Claude plans a TEXT-FREE scene + the overlay
@@ -20,21 +24,27 @@ const SYSTEM = `You are Stratege's creative director.
 
 You plan ONE startup-aware marketing image. You are NOT making a generic poster.
 
-Given the user's request, their startup profile, and the fixed creative direction, output STRICT JSON only - no prose, no markdown fences:
+Given the user's request and their startup profile, output STRICT JSON only - no prose, no markdown fences:
 {
+  "style": "ONE style id that best fits THIS startup/product (see allowed list below). Choose the visual identity that a great brand designer would pick for this specific company — an AI SaaS is not a fitness brand is not a luxury watch.",
   "scene_prompt": "A vivid description of the IMAGE SCENE ONLY - product, setting, props, lighting, mood, colors, subject, camera, visual identity. Describe it like an art director. CRITICAL: do not mention any text, words, letters, signs, labels or captions - the scene must be purely visual.",
   "headline": "The main marketing text to display on the image. Punchy and clear. Match the startup and request.",
   "cta": "A 2-4 word call to action, or an empty string if none fits."
 }
 
-CREATIVE DIRECTION IS FIXED FOR THIS REQUEST:
-You will receive Style, Platform, Layout, Palette, Energy, Image Treatment and Subject Hint.
-Use those as hard constraints. The scene must feel specific to the startup/product/category, not like a generic founder stock image.
+ALLOWED STYLE IDS (pick exactly one for "style"):
+premium, modern_saas, minimal, aesthetic, bold, luxury, editorial, corporate, futuristic, gen_z, dark_mode, startup_clean, apple_minimal, stripe_saas
 
-Examples:
-- AI SaaS + Modern SaaS + LinkedIn: clean product UI, dashboard/device mockup, productivity, premium B2B trust.
-- Fitness + Bold + Instagram: motion, athletic energy, strong contrast, visceral lifestyle moment.
-- Luxury tech + Apple minimal + Website/Instagram: cinematic product, minimal industrial design, refined lighting.
+HOW TO CHOOSE THE STYLE — be specific to the business:
+- AI / SaaS / dev tools / B2B software → modern_saas, stripe_saas, futuristic, or dark_mode
+- Fitness / sports / energy / bold consumer → bold or gen_z
+- Luxury / jewellery / watches / high-end / premium consumer tech → luxury or apple_minimal
+- Skincare / beauty / wellness / lifestyle → aesthetic or editorial
+- Agencies / enterprise / finance / professional services → corporate or editorial
+- Indie maker / small startup / clean & simple → startup_clean or minimal
+Do NOT default everything to the same style. The whole point is that two different startups look visibly different.
+
+The "scene_prompt" must match the chosen style and feel specific to the startup's product category and audience — never a generic founder-at-laptop stock image unless that truly is the product.
 
 CRITICAL RULE - USER'S CHOICE IS FINAL:
 When the user's request specifies an exact hook, headline, or CTA (e.g. quoted text, or "headline: ...", "use this hook: ..."), you MUST use that exact text - word for word, character for character. Do NOT rewrite, rephrase, shorten, improve, or substitute it. Copy it verbatim into the "headline" or "cta" field.`;
@@ -92,7 +102,16 @@ export async function planImage(
   brand: Record<string, unknown>,
   request: string
 ): Promise<ImagePlan> {
-  const direction = makeCreativeDirection(brand, request);
+  // If the user explicitly named a style/platform in their request, that is final.
+  const explicitStyle = styleFromText(request);
+  const platform = detectPlatform(request, brand);
+
+  // Initial direction (used for the prompt + as a safe fallback).
+  const direction = makeCreativeDirection(
+    brand,
+    request,
+    explicitStyle ? { style: explicitStyle, platform } : { platform }
+  );
   const brandCtx = [
     brand.brand_name && `Brand: ${brand.brand_name}`,
     brand.role && `Founder role: ${brand.role}`,
@@ -144,12 +163,31 @@ Return the JSON.`,
       ],
     });
     const obj = JSON.parse(extractJson(r.text));
-    const fallback = fallbackPlan(request, direction);
+
+    // Resolve the final style:
+    //  1. explicit user request wins,
+    //  2. else Claude's startup-aware pick,
+    //  3. else the regex-detected default.
+    let finalStyle: VisualStyle = direction.style;
+    if (explicitStyle) {
+      finalStyle = explicitStyle;
+    } else {
+      const claudeStyle = String(obj.style ?? "").trim();
+      if (isVisualStyle(claudeStyle)) finalStyle = claudeStyle;
+    }
+
+    const finalDirection =
+      finalStyle === direction.style
+        ? direction
+        : makeCreativeDirection(brand, request, { style: finalStyle, platform });
+
+    const fallback = fallbackPlan(request, finalDirection);
     return {
-      scene_prompt: String(obj.scene_prompt || "").trim() || fallback.scene_prompt,
+      scene_prompt:
+        String(obj.scene_prompt || "").trim() || fallback.scene_prompt,
       headline: String(obj.headline ?? "").trim() || fallback.headline,
       cta: String(obj.cta ?? "").trim(),
-      direction,
+      direction: finalDirection,
     };
   } catch {
     return fallbackPlan(request, direction);
