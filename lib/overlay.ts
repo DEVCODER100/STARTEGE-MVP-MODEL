@@ -192,34 +192,53 @@ function resolvePalette(direction?: CreativeDirection | null): Palette {
   };
 }
 
+// Each generation rotates layout for per-image freshness, while the palette
+// (brand identity) stays consistent. The style's natural layout is favoured
+// but not forced — so two images for the SAME startup look fresh but on-brand,
+// and two DIFFERENT startups look clearly different (different palette + lean).
 function resolveVariant(direction?: CreativeDirection | null): Variant {
-  if (!direction) return VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
+  const all: Variant[] = ["card-bottom", "card-top", "split-right"];
+  if (!direction) return all[Math.floor(Math.random() * all.length)];
+
+  let preferred: Variant = "card-bottom";
   switch (direction.layout) {
     case "split_product":
     case "hero_device":
-      return "split-right";
+      preferred = "split-right";
+      break;
     case "bold_poster":
     case "social_burst":
-      return "card-top";
-    case "minimal_luxury":
-    case "editorial_card":
+      preferred = "card-top";
+      break;
     default:
-      return "card-bottom";
+      preferred = "card-bottom";
   }
+
+  // ~55% favour the on-brand layout; otherwise rotate for variety.
+  if (Math.random() < 0.55) return preferred;
+  const others = all.filter((v) => v !== preferred);
+  return others[Math.floor(Math.random() * others.length)];
 }
 
 function headlineColor(pal: Palette) {
   return pal.text ?? TEXT_DARK;
 }
 
-/** Paint a soft-gradient pastel background. */
+/** Paint a soft-gradient background. Gradient direction varies per generation. */
 function paintBackground(
   ctx: SKRSContext2D,
   W: number,
   H: number,
   pal: Palette
 ) {
-  const g = ctx.createLinearGradient(0, 0, W, H);
+  const r = Math.random();
+  // Vary the gradient direction so the same palette still feels fresh.
+  const g =
+    r < 0.34
+      ? ctx.createLinearGradient(0, 0, W, H) // diagonal
+      : r < 0.67
+        ? ctx.createLinearGradient(0, 0, 0, H) // vertical
+        : ctx.createLinearGradient(W, 0, 0, H); // anti-diagonal
   g.addColorStop(0, pal.bg);
   g.addColorStop(1, pal.bgEdge);
   ctx.fillStyle = g;
