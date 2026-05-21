@@ -23,8 +23,24 @@ type Profile = Record<string, unknown> & {
   city?: string;
   language?: string;
   whatsapp_enabled?: boolean;
+  brand_colors?: string;
   onboarding_complete?: boolean;
 };
+
+const BRAND_COLORS = [
+  { value: "#0F8A60", label: "Teal" },
+  { value: "#2563EB", label: "Blue" },
+  { value: "#635BFF", label: "Indigo" },
+  { value: "#7C3AED", label: "Purple" },
+  { value: "#E0342B", label: "Red" },
+  { value: "#F97316", label: "Orange" },
+  { value: "#EAB308", label: "Yellow" },
+  { value: "#EC4899", label: "Pink" },
+  { value: "#16A34A", label: "Green" },
+  { value: "#A5793D", label: "Gold" },
+  { value: "#141414", label: "Black" },
+  { value: "#64748B", label: "Slate" },
+];
 
 const ROLES = [
   { value: "founder", label: "Founder / Owner" },
@@ -86,7 +102,7 @@ const LANGUAGES = [
   "Tamil", "Telugu", "Bengali", "Kannada", "Malayalam", "Punjabi", "Other",
 ];
 
-const TOTAL = 11;
+const TOTAL = 12;
 
 type Phase = "kickstart" | "questions";
 
@@ -354,6 +370,7 @@ function firstUnansweredStep(p: Profile): number {
     "content_style",
     "city",
     "language_done",
+    "brand_colors",
   ];
   for (let i = 0; i < order.length; i++) {
     const k = order[i];
@@ -416,9 +433,84 @@ function Step({
           onNext={onNext}
         />
       );
+    case 11:
+      return (
+        <ColorStep
+          {...cardProps}
+          initial={profile.brand_colors}
+          onNext={onNext}
+        />
+      );
     default:
       return null;
   }
+}
+
+function ColorStep({
+  initial,
+  onNext,
+  ...c
+}: StepCommon & { initial?: string; onNext: (p: Partial<Profile>) => void }) {
+  const [v, setV] = useState(initial ?? "");
+  const isPreset = BRAND_COLORS.some((b) => b.value.toLowerCase() === v.toLowerCase());
+  return (
+    <QuestionCard
+      {...c}
+      title="Pick your brand color"
+      hint={
+        initial
+          ? "We detected this from your website — change it if you like."
+          : "Used to design your posts. Pick one or paste a hex code."
+      }
+    >
+      <div className="grid grid-cols-4 gap-2">
+        {BRAND_COLORS.map((b) => (
+          <button
+            key={b.value}
+            type="button"
+            onClick={() => setV(b.value)}
+            className={`flex flex-col items-center gap-1.5 py-2.5 rounded-lg border transition-colors ${
+              v.toLowerCase() === b.value.toLowerCase()
+                ? "border-accent bg-bg-accent-dk"
+                : "border-border hover:border-accent"
+            }`}
+          >
+            <span
+              className="w-6 h-6 rounded-full border border-border"
+              style={{ backgroundColor: b.value }}
+            />
+            <span className="text-[11px] text-text-secondary">{b.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 flex items-center gap-2">
+        <span
+          className="w-9 h-9 rounded-lg border border-border flex-shrink-0"
+          style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(v) ? v : "#FFFFFF" }}
+        />
+        <input
+          type="text"
+          value={v}
+          onChange={(e) => setV(e.target.value)}
+          placeholder="#0F8A60 or any hex"
+          className="flex-1 bg-bg-surface border border-border rounded-lg px-3 py-2.5 text-text-primary text-sm placeholder:text-text-muted focus:border-accent outline-none"
+        />
+      </div>
+      {!isPreset && v && !/^#[0-9a-fA-F]{6}$/.test(v) && (
+        <p className="text-text-muted text-xs mt-2">
+          Enter a 6-digit hex like #0F8A60.
+        </p>
+      )}
+
+      <PrimaryButton
+        onClick={() => onNext({ brand_colors: v.trim() })}
+        disabled={!/^#[0-9a-fA-F]{6}$/.test(v.trim())}
+      >
+        Finish setup
+      </PrimaryButton>
+    </QuestionCard>
+  );
 }
 
 function RoleStep({
@@ -726,7 +818,7 @@ function LanguageStep({
         onClick={() => onNext({ language: lang, whatsapp_enabled: wa })}
         disabled={!lang}
       >
-        Finish setup
+        Continue
       </PrimaryButton>
     </QuestionCard>
   );
