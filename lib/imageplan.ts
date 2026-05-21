@@ -4,6 +4,9 @@ import {
   detectPlatform,
   styleFromText,
   isVisualStyle,
+  isDarkStyle,
+  resolveBrandColor,
+  paletteFromAccent,
   PLATFORM_LABELS,
   STYLE_LABELS,
   type CreativeDirection,
@@ -27,6 +30,7 @@ You plan ONE startup-aware marketing image. You are NOT making a generic poster.
 Given the user's request and their startup profile, output STRICT JSON only - no prose, no markdown fences:
 {
   "style": "ONE style id that best fits THIS startup/product (see allowed list below). Choose the visual identity that a great brand designer would pick for this specific company — an AI SaaS is not a fitness brand is not a luxury watch.",
+  "accent_hex": "#RRGGBB — ONE brand-appropriate accent color for THIS specific startup. Pick a color that fits the product, category and emotion (e.g. fintech → confident blue, fitness → energetic orange/red, luxury → gold or graphite, eco → green, playful consumer → pink/purple). Two different startups must get visibly different colors.",
   "scene_prompt": "A vivid description of the IMAGE SCENE ONLY - product, setting, props, lighting, mood, colors, subject, camera, visual identity. Describe it like an art director. CRITICAL: do not mention any text, words, letters, signs, labels or captions - the scene must be purely visual.",
   "headline": "The main marketing text to display on the image. Punchy and clear. Match the startup and request.",
   "cta": "A 2-4 word call to action, or an empty string if none fits."
@@ -176,10 +180,27 @@ Return the JSON.`,
       if (isVisualStyle(claudeStyle)) finalStyle = claudeStyle;
     }
 
-    const finalDirection =
+    let finalDirection =
       finalStyle === direction.style
         ? direction
         : makeCreativeDirection(brand, request, { style: finalStyle, platform });
+
+    // Color identity priority:
+    //   1. the founder's REAL brand color (from onboarding/scrape) — handled
+    //      inside makeCreativeDirection,
+    //   2. else Claude's startup-appropriate accent (so every startup gets a
+    //      distinct, fitting color even when no brand color was captured).
+    const hasRealColor = !!resolveBrandColor(String(brand.brand_colors ?? ""));
+    if (!hasRealColor) {
+      const m = String(obj.accent_hex ?? "").match(/#([0-9a-f]{6}|[0-9a-f]{3})\b/i);
+      const claudeAccent = resolveBrandColor(m ? m[0] : "");
+      if (claudeAccent) {
+        finalDirection = {
+          ...finalDirection,
+          palette: paletteFromAccent(claudeAccent, isDarkStyle(finalStyle)),
+        };
+      }
+    }
 
     const fallback = fallbackPlan(request, finalDirection);
     return {

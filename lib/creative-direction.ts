@@ -165,6 +165,10 @@ export function detectPlatform(input: string, brand: Record<string, unknown>): C
 // Styles whose identity is intentionally dark.
 const DARK_STYLES = new Set<VisualStyle>(["bold", "dark_mode", "futuristic"]);
 
+export function isDarkStyle(style: VisualStyle): boolean {
+  return DARK_STYLES.has(style);
+}
+
 export function makeCreativeDirection(
   brand: Record<string, unknown>,
   request: string,
