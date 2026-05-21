@@ -20,7 +20,7 @@ const FieldSchema = z.object({
   whatsapp_enabled: z.boolean().optional(),
   brand_name: z.string().max(120).optional(),
   website: z.string().max(300).optional(),
-  brand_colors: z.string().max(120).optional(),
+  brand_colors: z.string().max(300).optional(),
   budget: z.string().max(50).optional(),
   country: z.string().max(80).optional(),
   role: z.string().max(80).optional(),

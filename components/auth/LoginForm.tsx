@@ -65,7 +65,7 @@ export default function LoginForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@founder.dev"
+            placeholder="Enter your email address"
             className="w-full bg-white border border-border rounded-lg px-3 py-2.5 text-text-primary text-sm placeholder:text-text-muted focus:border-accent outline-none"
             autoComplete="email"
           />

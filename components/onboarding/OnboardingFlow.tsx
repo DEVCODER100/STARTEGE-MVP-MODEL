@@ -27,20 +27,7 @@ type Profile = Record<string, unknown> & {
   onboarding_complete?: boolean;
 };
 
-const BRAND_COLORS = [
-  { value: "#0F8A60", label: "Teal" },
-  { value: "#2563EB", label: "Blue" },
-  { value: "#635BFF", label: "Indigo" },
-  { value: "#7C3AED", label: "Purple" },
-  { value: "#E0342B", label: "Red" },
-  { value: "#F97316", label: "Orange" },
-  { value: "#EAB308", label: "Yellow" },
-  { value: "#EC4899", label: "Pink" },
-  { value: "#16A34A", label: "Green" },
-  { value: "#A5793D", label: "Gold" },
-  { value: "#141414", label: "Black" },
-  { value: "#64748B", label: "Slate" },
-];
+const DEFAULT_THEME_COLORS = "#141414, #F5F5F3, #0F8A60";
 
 const ROLES = [
   { value: "founder", label: "Founder / Owner" },
@@ -87,9 +74,9 @@ const TIMES = [
   { value: "evening", label: "Evening" },
 ];
 const STYLES = [
-  { value: "educational", label: "Educational" },
-  { value: "entertaining", label: "Entertaining" },
-  { value: "sales", label: "Sales" },
+  { value: "teach", label: "Teach people something" },
+  { value: "fun", label: "Make it fun / relatable" },
+  { value: "sell", label: "Sell my product" },
 ];
 const CITIES = [
   "Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Ahmedabad", "Chennai",
@@ -451,68 +438,82 @@ function ColorStep({
   onNext,
   ...c
 }: StepCommon & { initial?: string; onNext: (p: Partial<Profile>) => void }) {
-  const [v, setV] = useState(initial ?? "");
-  const isPreset = BRAND_COLORS.some((b) => b.value.toLowerCase() === v.toLowerCase());
+  const detected = initial?.trim() || "";
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState(detected || DEFAULT_THEME_COLORS);
+  const colors = v.match(/#[0-9a-fA-F]{6}\b/g) ?? [];
+  const shownColors =
+    colors.length > 0
+      ? colors
+      : DEFAULT_THEME_COLORS.match(/#[0-9a-fA-F]{6}\b/g) ?? [];
+  const hasValidTheme = colors.length > 0;
+
   return (
     <QuestionCard
       {...c}
-      title="Pick your brand color"
+      title="Confirm your brand theme"
       hint={
-        initial
-          ? "We detected this from your website — change it if you like."
-          : "Used to design your posts. Pick one or paste a hex code."
+        detected
+          ? "We detected these colors from your website. Use them, or edit if they feel wrong."
+          : "We could not detect a theme from your website. Stratege can use a clean default, or you can paste your brand colors."
       }
     >
-      <div className="grid grid-cols-4 gap-2">
-        {BRAND_COLORS.map((b) => (
-          <button
-            key={b.value}
-            type="button"
-            onClick={() => setV(b.value)}
-            className={`flex flex-col items-center gap-1.5 py-2.5 rounded-lg border transition-colors ${
-              v.toLowerCase() === b.value.toLowerCase()
-                ? "border-accent bg-bg-accent-dk"
-                : "border-border hover:border-accent"
-            }`}
-          >
+      <div className="rounded-xl border border-border bg-bg-surface p-4">
+        <div className="text-xs text-text-muted mb-3">
+          {detected ? "Detected theme" : "Suggested theme"}
+        </div>
+        <div className="flex items-center gap-2">
+          {shownColors.map((color) => (
             <span
-              className="w-6 h-6 rounded-full border border-border"
-              style={{ backgroundColor: b.value }}
+              key={color}
+              className="h-10 w-10 rounded-full border border-border"
+              style={{ backgroundColor: color }}
+              title={color}
             />
-            <span className="text-[11px] text-text-secondary">{b.label}</span>
-          </button>
-        ))}
+          ))}
+        </div>
+        <p className="mt-3 text-sm text-text-secondary">
+          These colors guide the look of your images, cards, and creative direction.
+        </p>
       </div>
 
-      <div className="mt-4 flex items-center gap-2">
-        <span
-          className="w-9 h-9 rounded-lg border border-border flex-shrink-0"
-          style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(v) ? v : "#FFFFFF" }}
-        />
-        <input
-          type="text"
-          value={v}
-          onChange={(e) => setV(e.target.value)}
-          placeholder="#0F8A60 or any hex"
-          className="flex-1 bg-bg-surface border border-border rounded-lg px-3 py-2.5 text-text-primary text-sm placeholder:text-text-muted focus:border-accent outline-none"
-        />
-      </div>
-      {!isPreset && v && !/^#[0-9a-fA-F]{6}$/.test(v) && (
-        <p className="text-text-muted text-xs mt-2">
-          Enter a 6-digit hex like #0F8A60.
-        </p>
+      {!editing ? (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="mt-3 w-full rounded-lg border border-border bg-bg-surface py-2.5 text-sm text-text-secondary hover:border-accent hover:text-text-primary"
+        >
+          Change theme colors
+        </button>
+      ) : (
+        <div className="mt-3 space-y-2">
+          <label className="block text-xs text-text-muted">
+            Paste 2-4 hex colors, separated by commas
+          </label>
+          <input
+            type="text"
+            value={v}
+            onChange={(e) => setV(e.target.value)}
+            placeholder="#141414, #F5F5F3, #0F8A60"
+            className="w-full bg-bg-surface border border-border rounded-lg px-3 py-2.5 text-text-primary text-sm placeholder:text-text-muted focus:border-accent outline-none"
+          />
+          <p className="text-xs text-text-muted">
+            Example: main color, background color, accent color.
+          </p>
+        </div>
       )}
 
       <PrimaryButton
-        onClick={() => onNext({ brand_colors: v.trim() })}
-        disabled={!/^#[0-9a-fA-F]{6}$/.test(v.trim())}
+        onClick={() =>
+          onNext({ brand_colors: hasValidTheme ? v.trim() : DEFAULT_THEME_COLORS })
+        }
+        disabled={editing && !hasValidTheme}
       >
         Finish setup
       </PrimaryButton>
     </QuestionCard>
   );
 }
-
 function RoleStep({
   initial,
   onNext,
@@ -697,7 +698,11 @@ function StyleStep({
   ...c
 }: StepCommon & { initial?: string; onNext: (p: Partial<Profile>) => void }) {
   return (
-    <QuestionCard {...c} title="Pick your content style">
+    <QuestionCard
+      {...c}
+      title="What should your posts mostly do?"
+      hint="Simple version: teach something, feel fun, or help sell your product."
+    >
       <TapGrid
         allowOther
         options={STYLES}
@@ -823,3 +828,4 @@ function LanguageStep({
     </QuestionCard>
   );
 }
+
