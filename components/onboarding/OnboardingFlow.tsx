@@ -708,7 +708,7 @@ function StyleStep({
         options={STYLES}
         value={initial}
         onPick={(v) => onNext({ content_style: v })}
-        cols={3}
+        cols={2}
       />
     </QuestionCard>
   );
