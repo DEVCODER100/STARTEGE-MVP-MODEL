@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1080px; }
+
+  body {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    background: #F5F5F0;
+    width: 1080px;
+    height: 1080px;
+    overflow: hidden;
+  }
+
+  .card {
+    position: absolute;
+    inset: 30px;
+    background: #FFFFFF;
+    border: 1px solid #ECECE6;
+    border-radius: 24px;
+    box-shadow: 0 20px 50px -24px rgba(26,26,26,0.18);
+    padding: 70px 74px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .logo {
+    font-size: 30px;
+    font-weight: 700;
+    color: #1A1A1A;
+    letter-spacing: -0.01em;
+  }
+  .logo .accent { color: #1D9E75; }
+
+  .content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .headline {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 50px;
+    font-weight: 600;
+    line-height: 1.18;
+    color: #1A1A1A;
+    letter-spacing: -0.01em;
+  }
+
+  .body {
+    font-size: 25px;
+    line-height: 1.5;
+    color: #1A1A1A;
+    font-weight: 400;
+  }
+  .body.bold { font-weight: 700; font-size: 28px; line-height: 1.32; }
+
+  .teal { color: #1D9E75; font-weight: 600; }
+
+  .gap-40 { height: 40px; }
+  .gap-30 { height: 30px; }
+  .gap-20 { height: 20px; }
+  .gap-60 { height: 60px; }
+
+  .quote {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-style: italic;
+    font-size: 29px;
+    line-height: 1.42;
+    color: #1A1A1A;
+    border-left: 4px solid #1D9E75;
+    padding-left: 20px;
+  }
+
+  .cta {
+    font-size: 40px;
+    font-weight: 700;
+    color: #1D9E75;
+    letter-spacing: -0.01em;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">Strat<span class="accent">è</span>ge</div>
+    <div class="content">
+      <div class="headline">Today the MVP is live.</div>
+      <div class="gap-40"></div>
+      <div class="body">Stratège — your content thinking partner.</div>
+      <div class="gap-20"></div>
+      <div class="body">Tell it what you shipped today → get <span class="teal">3 post angles in your own voice.</span></div>
+      <div class="gap-20"></div>
+      <div class="body bold">Not generic AI writing.<br>Your voice.</div>
+      <div class="gap-60"></div>
+      <div class="cta">stratege.in</div>
+    </div>
+  </div>
+</body>
+</html>

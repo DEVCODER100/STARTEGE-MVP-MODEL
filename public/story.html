@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { width: 1080px; height: 1920px; }
+
+  body {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    background: #FAFAF7;
+    color: #1A1A1A;
+    width: 1080px;
+    height: 1920px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* subtle paper texture via faint dotted grid */
+  body::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(#1a1a1a08 1px, transparent 1px);
+    background-size: 28px 28px;
+    pointer-events: none;
+  }
+
+  .frame {
+    position: absolute;
+    inset: 56px;
+    background: #FFFFFF;
+    border: 1px solid #E6E6E0;
+    border-radius: 28px;
+    padding: 84px 80px 72px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 60px -30px #1a1a1a26;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 30px;
+  }
+
+  .wordmark {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #1A1A1A;
+  }
+  .wordmark .grave { color: #0F8A60; }
+
+  .kicker {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #0F8A60;
+    padding: 8px 16px;
+    background: #ECF8F2;
+    border-radius: 999px;
+  }
+
+  .story {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+  }
+
+  .story p {
+    font-size: 24px;
+    line-height: 1.42;
+    color: #2A2A28;
+    letter-spacing: -0.005em;
+  }
+
+  .punch {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 31px !important;
+    font-weight: 500;
+    color: #1A1A1A !important;
+    line-height: 1.28 !important;
+  }
+
+  .accent { color: #0F8A60 !important; font-weight: 600; }
+
+  .quote {
+    font-family: 'Newsreader', Georgia, serif;
+    font-style: italic;
+    font-size: 28px !important;
+    line-height: 1.38 !important;
+    color: #1A1A1A !important;
+    padding-left: 26px;
+    border-left: 3px solid #0F8A60;
+    margin: 2px 0;
+  }
+
+  .footer {
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid #E6E6E0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .footer .site {
+    font-size: 28px;
+    font-weight: 700;
+    color: #0F8A60;
+    letter-spacing: -0.01em;
+  }
+  .footer .tag {
+    font-size: 19px;
+    color: #8A8A82;
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="topbar">
+      <div class="wordmark">Strat<span class="grave">è</span>ge</div>
+      <div class="kicker">Founder Story</div>
+    </div>
+
+    <div class="story">
+      <p class="punch">A year ago I built my first real product. <span class="accent">Velora</span> — an AI wardrobe app.</p>
+
+      <p>I spent months on it. Built feature after feature. Auth, wardrobe management, outfit generation, AI stylist, ratings, credits, payments. Everything I thought a real product should have.</p>
+
+      <p>Then I launched it.</p>
+
+      <p class="punch">Nothing happened.</p>
+
+      <p>No users. No traction. No clue why.</p>
+
+      <p>The truth was harder to accept — the idea wasn't strong enough. And I had no idea how to market it. I had built <span class="accent">12 features</span> before talking to a single user.</p>
+
+      <p>That's when it hit me — this isn't just my problem. Every technical founder I know has this exact struggle. We're great at building. We love building. But marketing? Writing hooks? Knowing what to post? That's where most of us break.</p>
+
+      <p>The product gets built. The distribution never happens.</p>
+
+      <p>So I decided to start over. For weeks I lived inside founder communities — Discord, Reddit, Twitter, LinkedIn. I didn't pitch anything. I just listened. I asked founders what their hardest part was. Not building. Not funding. Marketing.</p>
+
+      <p>I heard the same sentence over and over:</p>
+
+      <p class="quote">"I build every day, but I don't know how to turn that into content."</p>
+
+      <p>That was the insight. The pain wasn't lack of AI tools. It was the mental tax of translating work into words.</p>
+
+      <p>So I built the first version of Stratège around that exact problem. Showed founders. Got brutal feedback. Threw away half. Iterated. Showed again. Threw away more.</p>
+
+      <p class="punch">Today the MVP is live.</p>
+
+      <p>Tell it what you shipped today → get <span class="accent">3 post angles in your own voice.</span> Not generic AI writing. Your voice.</p>
+
+      <p>This is what I wish I had when I was building Velora.</p>
+    </div>
+
+    <div class="footer">
+      <div class="site">stratege.in</div>
+      <div class="tag">build → ship → tell the story</div>
+    </div>
+  </div>
+</body>
+</html>
