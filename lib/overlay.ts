@@ -161,6 +161,163 @@ function drawImageCover(
   ctx.restore();
 }
 
+// ─── distinct CTA shapes ────────────────────────────────────────────────────
+// Each template uses a DIFFERENT button so generations never share one look.
+
+function btnMetrics(ctx: SKRSContext2D, text: string, fontPx: number, arrow: boolean) {
+  ctx.font = `${fontPx}px ${FONT}`;
+  const tw = ctx.measureText(text).width;
+  const arrowW = arrow ? fontPx * 1.15 : 0;
+  const padX = Math.round(fontPx * 1.0);
+  const padY = Math.round(fontPx * 0.55);
+  const w = Math.round(tw + arrowW) + padX * 2;
+  const h = fontPx + padY * 2;
+  return { tw, arrowW, padX, padY, w, h };
+}
+
+function drawArrow(ctx: SKRSContext2D, x: number, midY: number, size: number, color: string) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, size * 0.16);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(x, midY);
+  ctx.lineTo(x + size, midY);
+  ctx.moveTo(x + size * 0.52, midY - size * 0.32);
+  ctx.lineTo(x + size, midY);
+  ctx.lineTo(x + size * 0.52, midY + size * 0.32);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Sharp/soft rectangle button, optional trailing arrow.
+function drawRectButton(
+  ctx: SKRSContext2D,
+  cx: number,
+  topY: number,
+  text: string,
+  fontPx: number,
+  fill: string,
+  textColor: string,
+  align: "center" | "left",
+  radius: number,
+  arrow = false
+) {
+  if (!text) return;
+  const { padX, w, h } = btnMetrics(ctx, text, fontPx, arrow);
+  const x = align === "center" ? cx - w / 2 : cx;
+  ctx.fillStyle = fill;
+  roundedRectPath(ctx, x, topY, w, h, Math.min(radius, h / 2));
+  ctx.fill();
+  ctx.fillStyle = textColor;
+  ctx.font = `${fontPx}px ${FONT}`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  const ty = topY + h / 2 + fontPx * 0.34;
+  ctx.fillText(text, x + padX, ty);
+  if (arrow) {
+    const ax = x + padX + ctx.measureText(text).width + fontPx * 0.4;
+    drawArrow(ctx, ax, topY + h / 2, fontPx * 0.6, textColor);
+  }
+}
+
+// Outline-only "ghost" button with sharp corners (no fill).
+function drawGhostButton(
+  ctx: SKRSContext2D,
+  cx: number,
+  topY: number,
+  text: string,
+  fontPx: number,
+  lineColor: string,
+  align: "center" | "left" = "center"
+) {
+  if (!text) return;
+  const { w, h } = btnMetrics(ctx, text, fontPx, false);
+  const x = align === "center" ? cx - w / 2 : cx;
+  ctx.save();
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = Math.max(2, Math.round(fontPx * 0.09));
+  roundedRectPath(ctx, x, topY, w, h, Math.round(fontPx * 0.18));
+  ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = lineColor;
+  ctx.font = `${fontPx}px ${FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(text, x + w / 2, topY + h / 2 + fontPx * 0.34);
+}
+
+// Text link with an underline and trailing arrow — no box at all.
+function drawLinkCta(
+  ctx: SKRSContext2D,
+  x: number,
+  topY: number,
+  text: string,
+  fontPx: number,
+  color: string,
+  align: "center" | "left"
+) {
+  if (!text) return;
+  ctx.font = `${fontPx}px ${FONT}`;
+  const tw = ctx.measureText(text).width;
+  const arrowGap = fontPx * 0.45;
+  const arrowSize = fontPx * 0.6;
+  const left = align === "center" ? x - (tw + arrowGap + arrowSize) / 2 : x;
+  ctx.fillStyle = color;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(text, left, topY + fontPx);
+  ctx.fillRect(left, topY + fontPx * 1.28, tw, Math.max(2, Math.round(fontPx * 0.07)));
+  drawArrow(ctx, left + tw + arrowGap, topY + fontPx * 0.55, arrowSize, color);
+}
+
+// ─── decorations ──────────────────────────────────────────────────────────
+
+function drawDots(
+  ctx: SKRSContext2D,
+  x: number,
+  y: number,
+  cols: number,
+  rows: number,
+  gap: number,
+  r: number,
+  color: string
+) {
+  ctx.fillStyle = color;
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      ctx.beginPath();
+      ctx.arc(x + i * gap, y + j * gap, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawVRule(ctx: SKRSContext2D, x: number, y: number, h: number, w: number, color: string) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w, h);
+}
+
+// Stroke a thin border just inside an image rect (for the framed look).
+function strokeFrame(
+  ctx: SKRSContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+  color: string,
+  lineW: number
+) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineW;
+  roundedRectPath(ctx, x + lineW / 2, y + lineW / 2, w - lineW, h - lineW, r);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function paintBg(ctx: SKRSContext2D, W: number, H: number, a: string, b: string) {
   const r = Math.random();
   const g =
@@ -216,7 +373,8 @@ type Template = (
   pal: Palette
 ) => void;
 
-// 1) Editorial card — pastel bg, image in a rounded card, text above or below.
+// 1) Editorial card — pastel bg, image in a soft rounded card, centered accent
+//    tick above the headline, SOLID PILL cta. (premium / Notion)
 const tEditorial: Template = (ctx, img, headline, cta, pal) => {
   paintBg(ctx, W, H, pal.bg, pal.bgEdge);
   const m = Math.round(W * 0.085);
@@ -230,22 +388,29 @@ const tEditorial: Template = (ctx, img, headline, cta, pal) => {
   const ctaSize = Math.round(W * 0.04);
   const ctaH = ctaSize + Math.round(ctaSize * 0.55) * 2;
   const gap = cta ? Math.round(W * 0.045) : 0;
-  const blockH = lines.length * lineHeight + (cta ? ctaH + gap : 0);
+  const tickH = Math.round(W * 0.05);
+  const blockH = tickH + lines.length * lineHeight + (cta ? ctaH + gap : 0);
 
   const textTop = imageOnTop
-    ? imgY + imgH + Math.round(W * 0.07)
-    : Math.max(Math.round(W * 0.11), Math.round((imgY - m - blockH) / 2));
+    ? imgY + imgH + Math.round(W * 0.06)
+    : Math.max(Math.round(W * 0.09), Math.round((imgY - m - blockH) / 2));
   const cx = W / 2;
-  if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, textTop, pal.text);
-  if (cta) drawPill(ctx, cx, textTop + lines.length * lineHeight + gap, cta, ctaSize, pal.pillFill, pal.pillText);
+  // centered accent tick
+  ctx.fillStyle = pal.accent;
+  ctx.fillRect(cx - Math.round(W * 0.03), textTop, Math.round(W * 0.06), Math.max(3, Math.round(W * 0.007)));
+  const headTop = textTop + tickH;
+  if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, headTop, pal.text);
+  if (cta) drawPill(ctx, cx, headTop + lines.length * lineHeight + gap, cta, ctaSize, pal.pillFill, pal.pillText);
 };
 
-// 2) Full-bleed — image fills frame, dark scrim at bottom, white text over it.
+// 2) Full-bleed — image fills frame, dark scrim, UPPERCASE headline, white
+//    GHOST outline cta (no fill). (magazine cover / hero)
 const tFullBleed: Template = (ctx, img, headline, cta, pal) => {
   drawImageCover(ctx, img, 0, 0, W, H, 0);
   const m = Math.round(W * 0.08);
   const maxW = W - m * 2;
-  const { size, lines, lineHeight } = fitHeadline(ctx, headline, Math.round(W * 0.092), Math.round(W * 0.055), maxW, 3);
+  const head = headline.toUpperCase();
+  const { size, lines, lineHeight } = fitHeadline(ctx, head, Math.round(W * 0.092), Math.round(W * 0.055), maxW, 3);
   const ctaSize = Math.round(W * 0.042);
   const ctaH = ctaSize + Math.round(ctaSize * 0.55) * 2;
   const gap = cta ? Math.round(W * 0.05) : 0;
@@ -258,43 +423,56 @@ const tFullBleed: Template = (ctx, img, headline, cta, pal) => {
   ctx.fillStyle = g;
   ctx.fillRect(0, scrimTop, W, H - scrimTop);
   const cx = W / 2;
+  // brand-accent kicker bar above the headline
+  const barW = Math.round(W * 0.14);
+  ctx.fillStyle = pal.accent;
+  ctx.fillRect(cx - barW / 2, blockTop - Math.round(W * 0.045), barW, Math.max(4, Math.round(W * 0.008)));
   if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, blockTop, "#FFFFFF");
-  if (cta) drawPill(ctx, cx, blockTop + lines.length * lineHeight + gap, cta, ctaSize, pal.accent, readableOn(pal.accent));
+  if (cta) drawGhostButton(ctx, cx, blockTop + lines.length * lineHeight + gap, cta, ctaSize, "#FFFFFF");
 };
 
-// 3) Split — left text column on pastel, right full-height image.
+// 3) Split — left text column, full-height SHARP-EDGE image right, a vertical
+//    accent rule beside the headline, ARROW rectangle button. (Stripe SaaS)
 const tSplit: Template = (ctx, img, headline, cta, pal) => {
   paintBg(ctx, W, H, pal.bg, pal.bgEdge);
   const m = Math.round(W * 0.07);
   const imgW = Math.round(W * 0.46);
   drawImageCover(ctx, img, W - imgW, 0, imgW, H, 0);
-  const colW = W - imgW - m * 2;
-  const { size, lines, lineHeight } = fitHeadline(ctx, headline, Math.round(W * 0.072), Math.round(W * 0.046), colW, 6);
+  const ruleW = Math.max(4, Math.round(W * 0.011));
+  const ruleGap = Math.round(W * 0.04);
+  const textX = m + ruleW + ruleGap;
+  const colW = W - imgW - textX - Math.round(W * 0.04);
+  const { size, lines, lineHeight } = fitHeadline(ctx, headline, Math.round(W * 0.07), Math.round(W * 0.044), colW, 6);
   const ctaSize = Math.round(W * 0.036);
   const ctaH = ctaSize + Math.round(ctaSize * 0.55) * 2;
-  const gap = cta ? Math.round(W * 0.04) : 0;
+  const gap = cta ? Math.round(W * 0.045) : 0;
   const blockH = lines.length * lineHeight + (cta ? ctaH + gap : 0);
   const top = Math.round((H - blockH) / 2);
-  if (headline) drawHeadline(ctx, lines, size, lineHeight, m, top, pal.text, "left");
-  if (cta) drawPill(ctx, m, top + lines.length * lineHeight + gap, cta, ctaSize, pal.pillFill, pal.pillText, "left");
+  drawVRule(ctx, m, top, lines.length * lineHeight - Math.round(size * 0.2), ruleW, pal.accent);
+  if (headline) drawHeadline(ctx, lines, size, lineHeight, textX, top, pal.text, "left");
+  if (cta) drawRectButton(ctx, textX, top + lines.length * lineHeight + gap, cta, ctaSize, pal.pillFill, pal.pillText, "left", Math.round(W * 0.008), true);
 };
 
-// 4) Big poster — solid brand color, huge headline, small circular image accent.
+// 4) Big poster — solid brand color, scattered dot texture, huge UPPERCASE
+//    headline, CIRCULAR image accent, underlined text-LINK cta. (loud / gen-z)
 const tPoster: Template = (ctx, img, headline, cta, pal) => {
   ctx.fillStyle = pal.accent;
   ctx.fillRect(0, 0, W, H);
   const fg = readableOn(pal.accent);
+  const dotColor = fg === "#FFFFFF" ? "rgba(255,255,255,0.16)" : "rgba(20,20,20,0.12)";
+  drawDots(ctx, Math.round(W * 0.08), Math.round(H * 0.06), 7, 3, Math.round(W * 0.06), Math.max(3, Math.round(W * 0.008)), dotColor);
   const m = Math.round(W * 0.085);
   const maxW = W - m * 2;
-  const { size, lines, lineHeight } = fitHeadline(ctx, headline, Math.round(W * 0.12), Math.round(W * 0.07), maxW, 4);
+  const head = headline.toUpperCase();
+  const { size, lines, lineHeight } = fitHeadline(ctx, head, Math.round(W * 0.12), Math.round(W * 0.07), maxW, 4);
   const cx = W / 2;
-  const top = Math.round(H * 0.12);
+  const top = Math.round(H * 0.13);
   if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, top, fg);
   // circular image accent near the bottom
   const d = Math.round(W * 0.34);
-  const iy = H - Math.round(W * 0.1) - d - (cta ? Math.round(W * 0.16) : 0);
+  const iy = H - Math.round(W * 0.1) - d - (cta ? Math.round(W * 0.13) : 0);
   drawImageCover(ctx, img, cx - d / 2, iy, d, d, d / 2);
-  if (cta) drawPill(ctx, cx, iy + d + Math.round(W * 0.055), cta, Math.round(W * 0.042), fg === "#FFFFFF" ? "#FFFFFF" : "#141414", fg === "#FFFFFF" ? pal.accent : "#FFFFFF");
+  if (cta) drawLinkCta(ctx, cx, iy + d + Math.round(W * 0.055), cta, Math.round(W * 0.046), fg, "center");
 };
 
 // 5) Top banner — colored band with headline at top, full-bleed image below.
@@ -309,12 +487,18 @@ const tBanner: Template = (ctx, img, headline, cta, pal) => {
   const { size, lines, lineHeight } = fitHeadline(ctx, headline, Math.round(W * 0.07), Math.round(W * 0.05), maxW, 3);
   const ctaSize = Math.round(W * 0.036);
   const ctaH = ctaSize + Math.round(ctaSize * 0.55) * 2;
-  const gap = cta ? Math.round(W * 0.035) : 0;
-  const blockH = lines.length * lineHeight + (cta ? ctaH + gap : 0);
-  const top = Math.max(Math.round(W * 0.07), Math.round((bandH - blockH) / 2));
+  const gap = cta ? Math.round(W * 0.045) : 0;
+  const ruleH = Math.round(W * 0.035);
+  const blockH = lines.length * lineHeight + ruleH + (cta ? ctaH + gap : 0);
+  const top = Math.max(Math.round(W * 0.06), Math.round((bandH - blockH) / 2));
   const cx = W / 2;
   if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, top, fg);
-  if (cta) drawPill(ctx, cx, top + lines.length * lineHeight + gap, cta, ctaSize, fg === "#FFFFFF" ? "#FFFFFF" : "#141414", fg === "#FFFFFF" ? pal.accent : "#FFFFFF");
+  // thin rule under the headline
+  const ruleY = top + lines.length * lineHeight + Math.round(W * 0.012);
+  ctx.fillStyle = fg;
+  ctx.fillRect(cx - Math.round(W * 0.05), ruleY, Math.round(W * 0.1), Math.max(2, Math.round(W * 0.005)));
+  // SHARP filled rectangle button (square corners)
+  if (cta) drawRectButton(ctx, cx, ruleY + ruleH, cta, ctaSize, fg === "#FFFFFF" ? "#FFFFFF" : "#141414", fg === "#FFFFFF" ? pal.accent : "#FFFFFF", "center", 0);
 };
 
 // 6) Framed — brand-color frame around an inset image, headline in bottom band.
@@ -325,7 +509,11 @@ const tFrame: Template = (ctx, img, headline, cta, pal) => {
   const m = Math.round(W * 0.075);
   const imgY = m;
   const imgH = Math.round(H * 0.62);
-  drawImageCover(ctx, img, m, imgY, W - m * 2, imgH, Math.round(W * 0.04));
+  const imgR = Math.round(W * 0.02);
+  drawImageCover(ctx, img, m, imgY, W - m * 2, imgH, imgR);
+  // thin contrasting outline hugging the inset image
+  const inset = Math.round(W * 0.018);
+  strokeFrame(ctx, m + inset, imgY + inset, W - m * 2 - inset * 2, imgH - inset * 2, Math.max(0, imgR - inset), fg, Math.max(2, Math.round(W * 0.004)));
   const maxW = W - m * 2;
   const { size, lines, lineHeight } = fitHeadline(ctx, headline, Math.round(W * 0.072), Math.round(W * 0.05), maxW, 2);
   const ctaSize = Math.round(W * 0.038);
@@ -336,7 +524,8 @@ const tFrame: Template = (ctx, img, headline, cta, pal) => {
   const top = bandTop + Math.max(Math.round(W * 0.04), Math.round((H - bandTop - m - blockH) / 2));
   const cx = W / 2;
   if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, top, fg);
-  if (cta) drawPill(ctx, cx, top + lines.length * lineHeight + gap, cta, ctaSize, fg === "#FFFFFF" ? "#FFFFFF" : "#141414", fg === "#FFFFFF" ? pal.accent : "#FFFFFF");
+  // soft-radius rectangle button (distinct from the full pill)
+  if (cta) drawRectButton(ctx, cx, top + lines.length * lineHeight + gap, cta, ctaSize, fg === "#FFFFFF" ? "#FFFFFF" : "#141414", fg === "#FFFFFF" ? pal.accent : "#FFFFFF", "center", Math.round(W * 0.012));
 };
 
 type TemplateName =
