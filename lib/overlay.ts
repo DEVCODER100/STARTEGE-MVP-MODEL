@@ -1,11 +1,7 @@
 import { createCanvas, loadImage, GlobalFonts } from "@napi-rs/canvas";
 import type { SKRSContext2D, Image } from "@napi-rs/canvas";
 import { MANROPE_B64 } from "./font-data";
-import type {
-  CreativeDirection,
-  VisualStyle,
-  CreativePlatform,
-} from "./creative-direction";
+import type { CreativeDirection, VisualStyle } from "./creative-direction";
 
 // Compose a finished marketing card from a text-free subject image + text.
 // Six visually DISTINCT templates, picked with anti-repeat rotation, so two
@@ -464,32 +460,16 @@ const STYLE_TEMPLATES: Record<VisualStyle, TemplateName[]> = {
   startup_clean: ["editorial", "split", "banner"],
 };
 
-const PLATFORM_FAVORS: Partial<Record<CreativePlatform, TemplateName[]>> = {
-  linkedin: ["split", "banner", "editorial"],
-  instagram: ["fullbleed", "poster", "frame", "editorial"],
-  twitter: ["editorial", "split"],
-  youtube: ["fullbleed", "poster"],
-  facebook: ["banner", "fullbleed", "editorial"],
-  website: ["frame", "split", "editorial"],
-};
-
 const ALL_TEMPLATES = Object.keys(TEMPLATE_FNS) as TemplateName[];
 let _lastTemplate: TemplateName | null = null;
 
+// Pool = the style's templates (always 3+ distinct looks). We ROTATE among
+// them with anti-repeat, so the same startup never gets the same template
+// twice in a row, while staying on-brand (palette + style stay consistent).
+// (We deliberately do NOT intersect with a platform list — that could collapse
+//  the pool to a single template and produce the "always the same design" bug.)
 function selectTemplate(d?: CreativeDirection | null): TemplateName {
-  let pool: TemplateName[];
-  if (!d) {
-    pool = ALL_TEMPLATES;
-  } else {
-    const byStyle = STYLE_TEMPLATES[d.style] ?? ALL_TEMPLATES;
-    const byPlatform = PLATFORM_FAVORS[d.platform];
-    // Prefer templates the style AND platform agree on; fall back to style set.
-    const agreed = byPlatform
-      ? byStyle.filter((t) => byPlatform.includes(t))
-      : [];
-    pool = agreed.length > 0 ? agreed : byStyle;
-  }
-  // Anti-repeat for variety across consecutive generations.
+  const pool = d ? (STYLE_TEMPLATES[d.style] ?? ALL_TEMPLATES) : ALL_TEMPLATES;
   let choices = pool.filter((t) => t !== _lastTemplate);
   if (choices.length === 0) choices = pool;
   const pick = choices[Math.floor(Math.random() * choices.length)];
