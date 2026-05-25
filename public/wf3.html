@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap');
+  :root{
+    --white:#FFFFFF; --sidebar:#F7F6F3; --soft:#FAFAF7; --tint:#ECF8F2;
+    --border:#E6E6E0; --border-s:#D4D4CD; --accent:#0F8A60; --accent-dk:#0B6E4E;
+    --t1:#1A1A1A; --t2:#5C5C57; --t3:#8A8A82;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:1080px;height:1080px;}
+  body{font-family:'Inter',system-ui,sans-serif;width:1080px;height:1080px;overflow:hidden;
+    background:linear-gradient(160deg,#F3F2ED 0%,#E9E8E2 100%);color:var(--t1);}
+  .slide{position:absolute;inset:0;padding:60px 64px;display:flex;flex-direction:column;}
+  .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:26px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand .name{font-family:'Fraunces',serif;font-weight:600;font-size:28px;letter-spacing:-0.01em;}
+  .step{font-size:15px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--accent);
+        background:var(--tint);border:1px solid rgba(15,138,96,0.18);padding:8px 16px;border-radius:999px;}
+  .cap{font-family:'Fraunces',serif;font-size:40px;font-weight:500;line-height:1.16;letter-spacing:-0.01em;margin-bottom:10px;max-width:92%;}
+  .cap .i{font-style:italic;color:var(--accent);}
+  .sub{font-size:18px;color:var(--t2);line-height:1.45;margin-bottom:24px;max-width:88%;}
+  .device{flex:1;background:var(--white);border:1px solid var(--border);border-radius:18px;
+           box-shadow:0 30px 60px -28px rgba(16,24,40,0.28);overflow:hidden;display:flex;flex-direction:column;}
+  .chrome{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--sidebar);}
+  .dot{width:11px;height:11px;border-radius:50%;}
+  .urlbar{margin-left:14px;font-size:14px;color:var(--t3);background:var(--white);border:1px solid var(--border);border-radius:8px;padding:5px 14px;}
+  .view{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px 60px;position:relative;}
+
+  .pdots{display:flex;gap:9px;margin-bottom:26px;}
+  .pd{width:10px;height:10px;border-radius:50%;background:var(--border-s);}
+  .pd.on{background:var(--accent);}
+  .pd.cur{background:var(--accent);box-shadow:0 0 0 5px rgba(15,138,96,0.16);}
+
+  .qwrap{width:500px;max-width:100%;position:relative;}
+  .ghost{position:absolute;left:50%;transform:translateX(-50%);border:1px solid var(--border);background:#fff;border-radius:16px;}
+  .g1{top:-16px;width:90%;height:60px;opacity:0.55;}
+  .g2{top:-30px;width:80%;height:60px;opacity:0.3;}
+  .qcard{position:relative;background:var(--white);border:1px solid var(--border);border-radius:16px;padding:26px;box-shadow:0 10px 24px -10px rgba(16,24,40,0.12);}
+  .qmeta{color:var(--t3);font-size:13px;margin-bottom:10px;}
+  .qtitle{font-family:'Fraunces',serif;font-size:27px;font-weight:500;margin-bottom:6px;}
+  .qhint{color:var(--t2);font-size:15px;margin-bottom:18px;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
+  .opt{border:1px solid var(--border);background:var(--soft);border-radius:11px;padding:14px 16px;font-size:16px;color:var(--t2);}
+  .opt.sel{background:var(--tint);border-color:var(--accent);color:var(--accent-dk);font-weight:600;}
+
+  .learns{margin-top:24px;width:560px;max-width:100%;}
+  .learns .ttl{color:var(--t3);font-size:12px;text-transform:uppercase;letter-spacing:0.13em;text-align:center;margin-bottom:13px;}
+  .chips{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;}
+  .chip{display:inline-flex;align-items:center;gap:7px;font-size:15px;border-radius:999px;padding:9px 16px;border:1px solid var(--border);background:#fff;color:var(--t2);}
+  .chip.done{background:var(--tint);border-color:rgba(15,138,96,0.25);color:var(--accent-dk);font-weight:500;}
+  .ck{width:15px;height:15px;}
+</style>
+</head>
+<body>
+  <div class="slide">
+    <div class="top">
+      <div class="brand">
+        <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+          <path d="M5 15 L16 5 L27 15" stroke="#0F8A60" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M5 25 L16 15 L27 25" stroke="#0F8A60" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.38"/>
+        </svg>
+        <span class="name">Stratège</span>
+      </div>
+      <div class="step">03 · Onboarding</div>
+    </div>
+
+    <div class="cap">The AI learns your startup <span class="i">before generating content.</span></div>
+    <div class="sub">These questions matter — they teach the AI your product, so every strategy &amp; visual it generates actually fits you.</div>
+
+    <div class="device">
+      <div class="chrome">
+        <span class="dot" style="background:#FF5F57"></span>
+        <span class="dot" style="background:#FEBC2E"></span>
+        <span class="dot" style="background:#28C840"></span>
+        <span class="urlbar">stratege.in/onboarding</span>
+      </div>
+      <div class="view">
+        <div class="pdots">
+          <span class="pd on"></span><span class="pd on"></span><span class="pd on"></span>
+          <span class="pd cur"></span><span class="pd"></span><span class="pd"></span>
+          <span class="pd"></span><span class="pd"></span><span class="pd"></span>
+          <span class="pd"></span><span class="pd"></span><span class="pd"></span>
+        </div>
+
+        <div class="qwrap">
+          <div class="ghost g2"></div>
+          <div class="ghost g1"></div>
+          <div class="qcard">
+            <div class="qmeta">Question 4 of 12</div>
+            <div class="qtitle">Who is your ideal customer?</div>
+            <div class="qhint">Pick one — or tap Other to describe yours.</div>
+            <div class="grid">
+              <div class="opt sel">Online shoppers</div>
+              <div class="opt">Local customers</div>
+              <div class="opt">Businesses (B2B)</div>
+              <div class="opt">Working professionals</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="learns">
+          <div class="ttl">What Stratège learns about you</div>
+          <div class="chips">
+            <span class="chip done"><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="#0B6E4E" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Startup</span>
+            <span class="chip done"><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="#0B6E4E" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Audience</span>
+            <span class="chip">Goals</span>
+            <span class="chip">Tone</span>
+            <span class="chip">Founder style</span>
+            <span class="chip">Content prefs</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

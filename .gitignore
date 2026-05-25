@@ -40,3 +40,6 @@ public/generated/
 
 # Claude agent working files
 .claude/
+
+# Local design reference images (not for deploy)
+template/

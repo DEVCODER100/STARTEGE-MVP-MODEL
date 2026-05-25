@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; }
+
+  body {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    background: #FAFAF7;
+    color: #1A1A1A;
+    width: 1080px;
+    height: 1920px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  body::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(#1a1a1a08 1px, transparent 1px);
+    background-size: 28px 28px;
+    pointer-events: none;
+  }
+
+  .frame {
+    position: absolute;
+    inset: 56px;
+    background: #FFFFFF;
+    border: 1px solid #E6E6E0;
+    border-radius: 28px;
+    padding: 90px 80px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 60px -30px #1a1a1a26;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 56px;
+  }
+  .wordmark {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .wordmark .grave { color: #0F8A60; }
+  .kicker {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #0F8A60;
+    padding: 9px 18px;
+    background: #ECF8F2;
+    border-radius: 999px;
+  }
+
+  .content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .lead {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 50px;
+    font-weight: 600;
+    line-height: 1.18;
+    letter-spacing: -0.01em;
+    margin-bottom: 40px;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+  .chip {
+    font-size: 28px;
+    font-weight: 600;
+    color: #0B6E4E;
+    background: #ECF8F2;
+    border: 1px solid #0F8A6033;
+    border-radius: 999px;
+    padding: 14px 28px;
+  }
+
+  .body {
+    font-size: 29px;
+    line-height: 1.5;
+    color: #2A2A28;
+    margin-bottom: 30px;
+  }
+  .body .hl { color: #0F8A60; font-weight: 600; }
+  .body strong { color: #1A1A1A; font-weight: 600; }
+
+  .footer {
+    margin-top: 56px;
+    padding-top: 32px;
+    border-top: 1px solid #E6E6E0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .footer .dm {
+    font-family: 'Newsreader', Georgia, serif;
+    font-style: italic;
+    font-size: 30px;
+    color: #1A1A1A;
+  }
+  .footer .site {
+    font-size: 30px;
+    font-weight: 700;
+    color: #0F8A60;
+    letter-spacing: -0.01em;
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="topbar">
+      <div class="wordmark">Strat<span class="grave">è</span>ge</div>
+      <div class="kicker">Open to Collab</div>
+    </div>
+
+    <div class="content">
+      <div class="lead">Currently looking to collaborate with —</div>
+
+      <div class="chips">
+        <span class="chip">Founders</span>
+        <span class="chip">Creators</span>
+        <span class="chip">Startups</span>
+        <span class="chip">Small businesses</span>
+      </div>
+
+      <div class="body">
+        …who actively create content and want to experiment with AI-generated
+        <span class="hl">hooks, visuals, ad concepts &amp; content ideas.</span>
+      </div>
+
+      <div class="body">
+        Building <strong>Stratège</strong> in public — currently improving the MVP through
+        <span class="hl">real feedback, testing &amp; collaborations.</span>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="dm">Interested? Feel free to DM.</div>
+      <div class="site">stratege.in</div>
+    </div>
+  </div>
+</body>
+</html>
