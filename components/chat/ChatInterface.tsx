@@ -28,7 +28,7 @@ export default function ChatInterface({
   mode?: "coach" | "strategy" | "create";
   initialChatId?: string | null;
 }) {
-  const { messages, sending, fallback, send, reset } = useChat({
+  const { messages, sending, fallback, send, sendBriefAnswer, reset } = useChat({
     mode,
     initialChatId,
   });
@@ -113,6 +113,9 @@ export default function ChatInterface({
               content={m.content}
               imageUrl={m.imageUrl}
               imageMeta={m.imageMeta}
+              actions={m.actions}
+              onBriefAnswer={sendBriefAnswer}
+              disabled={sending}
             />
           ))}
           {sending && <ChatMessage role="assistant" content="" pending />}

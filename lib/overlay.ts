@@ -12,6 +12,7 @@ export interface OverlayText {
   headline?: string | null;
   cta?: string | null;
   direction?: CreativeDirection | null;
+  forceTemplate?: TemplateName | null;
 }
 
 const FONT = "Manrope";
@@ -528,7 +529,7 @@ const tFrame: Template = (ctx, img, headline, cta, pal) => {
   if (cta) drawRectButton(ctx, cx, top + lines.length * lineHeight + gap, cta, ctaSize, fg === "#FFFFFF" ? "#FFFFFF" : "#141414", fg === "#FFFFFF" ? pal.accent : "#FFFFFF", "center", Math.round(W * 0.012));
 };
 
-type TemplateName =
+export type TemplateName =
   | "editorial"
   | "fullbleed"
   | "split"
@@ -657,7 +658,14 @@ let _lastTemplate: TemplateName | null = null;
 // twice in a row, while staying on-brand (palette + style stay consistent).
 // (We deliberately do NOT intersect with a platform list — that could collapse
 //  the pool to a single template and produce the "always the same design" bug.)
-function selectTemplate(d?: CreativeDirection | null): TemplateName {
+function selectTemplate(
+  d?: CreativeDirection | null,
+  force?: TemplateName | null
+): TemplateName {
+  if (force && TEMPLATE_FNS[force]) {
+    _lastTemplate = force;
+    return force;
+  }
   const pool = d ? (STYLE_TEMPLATES[d.style] ?? ALL_TEMPLATES) : ALL_TEMPLATES;
   let choices = pool.filter((t) => t !== _lastTemplate);
   if (choices.length === 0) choices = pool;
@@ -688,6 +696,7 @@ export async function compositeText(
     return await canvas.encode("jpeg", 92);
   }
 
-  TEMPLATE_FNS[selectTemplate(text.direction)](ctx, img, headline, cta, pal);
+  const picked = selectTemplate(text.direction, text.forceTemplate ?? null);
+  TEMPLATE_FNS[picked](ctx, img, headline, cta, pal);
   return await canvas.encode("jpeg", 92);
 }

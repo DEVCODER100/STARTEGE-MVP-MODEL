@@ -11,11 +11,21 @@ export interface ImageMeta {
   messageId?: string;
 }
 
+export type BriefField = "template" | "hook" | "color";
+export interface MessageActions {
+  field: BriefField;
+  intro?: string;
+  options: { label: string; value: string; isHookText?: boolean }[];
+  messageId?: string;
+  resolvedValue?: string;
+}
+
 export interface Message {
   role: Role;
   content: string;
   imageUrl?: string | null;
   imageMeta?: ImageMeta | null;
+  actions?: MessageActions | null;
 }
 export interface Usage {
   posts: { used: number; limit: number; remaining: number };
@@ -30,6 +40,12 @@ export interface UseChatResult {
   chatId: string | null;
   usage: Usage | null;
   send: (text: string) => Promise<void>;
+  sendBriefAnswer: (
+    field: BriefField,
+    value: string,
+    label: string,
+    fromMessageId?: string
+  ) => Promise<void>;
   reset: () => void;
 }
 
@@ -67,12 +83,16 @@ export function useChat({
               content: string;
               image_url?: string;
               image_meta?: Omit<ImageMeta, "messageId"> | null;
+              actions?: Omit<MessageActions, "messageId"> | null;
             }) => ({
               role: m.role,
               content: m.content,
               imageUrl: m.image_url ?? null,
               imageMeta: m.image_meta
                 ? { ...m.image_meta, messageId: m.id }
+                : null,
+              actions: m.actions
+                ? { ...m.actions, messageId: m.id }
                 : null,
             })
           )
@@ -84,9 +104,12 @@ export function useChat({
     };
   }, [initialChatId]);
 
-  const send = useCallback(
-    async (text: string) => {
-      const userMsg: Message = { role: "user", content: text };
+  const post = useCallback(
+    async (
+      userMsg: Message,
+      briefAnswer?: { field: BriefField; value: string } | null,
+      markAnsweredOnMessageId?: string
+    ) => {
       const next = [...messages, userMsg];
       setMessages(next);
       setSending(true);
@@ -100,6 +123,7 @@ export function useChat({
             mode,
             messages: next.map((m) => ({ role: m.role, content: m.content })),
             chatId,
+            briefAnswer: briefAnswer ?? undefined,
           }),
         });
         const data = await res.json();
@@ -121,15 +145,32 @@ export function useChat({
 
         setFallback(!!data.fallback);
         if (data.usage) setUsage(data.usage);
-        setMessages((m) => [
-          ...m,
-          {
-            role: "assistant",
-            content: data.reply,
-            imageUrl: data.imageUrl ?? null,
-            imageMeta: data.imageMeta ?? null,
-          },
-        ]);
+        setMessages((m) => {
+          // Optimistically mark the previous chip set as answered.
+          const updated = markAnsweredOnMessageId
+            ? m.map((msg) =>
+                msg.actions?.messageId === markAnsweredOnMessageId
+                  ? {
+                      ...msg,
+                      actions: {
+                        ...msg.actions,
+                        resolvedValue: briefAnswer?.value,
+                      },
+                    }
+                  : msg
+              )
+            : m;
+          return [
+            ...updated,
+            {
+              role: "assistant",
+              content: data.reply,
+              imageUrl: data.imageUrl ?? null,
+              imageMeta: data.imageMeta ?? null,
+              actions: data.actions ?? null,
+            },
+          ];
+        });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Failed to send";
         setError(msg);
@@ -144,6 +185,29 @@ export function useChat({
     [messages, mode, chatId]
   );
 
+  const send = useCallback(
+    async (text: string) => {
+      await post({ role: "user", content: text });
+    },
+    [post]
+  );
+
+  const sendBriefAnswer = useCallback(
+    async (
+      field: BriefField,
+      value: string,
+      label: string,
+      fromMessageId?: string
+    ) => {
+      await post(
+        { role: "user", content: label },
+        { field, value },
+        fromMessageId
+      );
+    },
+    [post]
+  );
+
   const reset = useCallback(() => {
     setMessages([]);
     setChatId(null);
@@ -151,5 +215,15 @@ export function useChat({
     setFallback(false);
   }, []);
 
-  return { messages, sending, fallback, error, chatId, usage, send, reset };
+  return {
+    messages,
+    sending,
+    fallback,
+    error,
+    chatId,
+    usage,
+    send,
+    sendBriefAnswer,
+    reset,
+  };
 }

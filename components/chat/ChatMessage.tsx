@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ImageMeta } from "@/hooks/useChat";
+import type { ImageMeta, MessageActions, BriefField } from "@/hooks/useChat";
 
 export type Role = "user" | "assistant";
 
@@ -10,13 +10,24 @@ export default function ChatMessage({
   content,
   imageUrl,
   imageMeta,
+  actions,
   pending,
+  onBriefAnswer,
+  disabled,
 }: {
   role: Role;
   content: string;
   imageUrl?: string | null;
   imageMeta?: ImageMeta | null;
+  actions?: MessageActions | null;
   pending?: boolean;
+  onBriefAnswer?: (
+    field: BriefField,
+    value: string,
+    label: string,
+    fromMessageId?: string
+  ) => void;
+  disabled?: boolean;
 }) {
   const [url, setUrl] = useState<string | null | undefined>(imageUrl);
   const [editing, setEditing] = useState(false);
@@ -83,6 +94,43 @@ export default function ChatMessage({
             <div className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed">
               {content}
             </div>
+
+            {actions && actions.options.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {actions.options.map((opt) => {
+                  const isPicked = actions.resolvedValue === opt.value;
+                  const someoneElsePicked =
+                    !!actions.resolvedValue && !isPicked;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() =>
+                        onBriefAnswer?.(
+                          actions.field,
+                          opt.value,
+                          opt.label,
+                          actions.messageId
+                        )
+                      }
+                      disabled={!!disabled || !!actions.resolvedValue}
+                      className={`text-xs px-3 py-1.5 rounded-pill border transition-colors ${
+                        isPicked
+                          ? "bg-accent text-white border-accent"
+                          : someoneElsePicked
+                            ? "border-border text-text-muted opacity-50"
+                            : "border-border text-text-primary hover:border-accent hover:text-accent disabled:opacity-50"
+                      } ${
+                        actions.field === "hook" && opt.isHookText
+                          ? "max-w-full whitespace-normal text-left"
+                          : ""
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {url && (
               <div className="mt-3 max-w-[340px]">

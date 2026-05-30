@@ -17,7 +17,8 @@
     "db:migrate:usage": "node scripts/db-migrate-usage.mjs",
     "db:migrate:events": "node scripts/db-migrate-events.mjs",
     "db:migrate:chatimg": "node scripts/db-migrate-chatimg.mjs",
-    "db:migrate:imagemeta": "node scripts/db-migrate-imagemeta.mjs"
+    "db:migrate:imagemeta": "node scripts/db-migrate-imagemeta.mjs",
+    "db:migrate:brief": "node scripts/db-migrate-brief.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^5.7.6",

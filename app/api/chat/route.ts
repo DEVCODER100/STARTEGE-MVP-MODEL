@@ -4,8 +4,23 @@ import { getOrCreateUser } from "@/lib/users";
 import { getDb } from "@/lib/db";
 import { buildSystemPrompt, type Mode } from "@/lib/prompts";
 import { chat } from "@/lib/claude";
-import { generateMarketingImage } from "@/lib/imagegen";
+import {
+  generateMarketingImage,
+  generateMarketingImageFromBrief,
+} from "@/lib/imagegen";
 import { extractForcedText } from "@/lib/imageplan";
+import {
+  inferBrief,
+  nextQuestion,
+  generateHooks,
+  TEMPLATE_LABELS,
+  COLOR_LABELS,
+  type ImageBrief,
+  type BriefField,
+  type BriefActions,
+  type Template,
+  type ColorMode,
+} from "@/lib/image-brief";
 import { inspect, limits, logSecurityEvent } from "@/lib/security";
 import {
   canGeneratePost,
@@ -33,7 +48,78 @@ const Body = z.object({
     )
     .min(1)
     .max(40),
+  briefAnswer: z
+    .object({
+      field: z.enum(["template", "hook", "color"]),
+      value: z.string().min(1).max(400),
+    })
+    .nullable()
+    .optional(),
 });
+
+const TEMPLATE_IDS: Template[] = [
+  "product_launch",
+  "feature_update",
+  "founder_story",
+  "educational",
+  "testimonial",
+  "problem_solution",
+  "announcement",
+  "milestone",
+];
+const COLOR_IDS: ColorMode[] = ["brand", "brand_plus_accent", "custom"];
+
+function isTemplate(v: string): v is Template {
+  return (TEMPLATE_IDS as string[]).includes(v);
+}
+function isColorMode(v: string): v is ColorMode {
+  return (COLOR_IDS as string[]).includes(v);
+}
+
+function buildActionsFor(
+  field: BriefField,
+  brief: ImageBrief
+): BriefActions {
+  if (field === "template") {
+    return {
+      field,
+      intro: "What type of image do you want to create?",
+      options: TEMPLATE_IDS.map((t) => ({
+        label: TEMPLATE_LABELS[t],
+        value: t,
+      })),
+    };
+  }
+  if (field === "hook") {
+    const hooks = brief.hookOptions ?? [];
+    return {
+      field,
+      intro:
+        "Pick a hook for your headline — or just type your own as your next message.",
+      options: hooks.map((h) => ({ label: h, value: h, isHookText: true })),
+    };
+  }
+  return {
+    field,
+    intro: "Which color style should we use?",
+    options: COLOR_IDS.map((c) => ({ label: COLOR_LABELS[c], value: c })),
+  };
+}
+
+function applyBriefAnswer(
+  brief: ImageBrief,
+  answer: { field: BriefField; value: string }
+): ImageBrief {
+  const next = { ...brief };
+  if (answer.field === "template" && isTemplate(answer.value)) {
+    next.template = answer.value;
+  } else if (answer.field === "color" && isColorMode(answer.value)) {
+    next.color = answer.value;
+  } else if (answer.field === "hook") {
+    next.hook = answer.value.trim().replace(/^["']|["']$/g, "");
+  }
+  return next;
+}
 
 const FALLBACK_REPLY = `I'm online but my AI brain isn't funded yet — the OpenRouter account needs credits to call Claude.
 
@@ -101,7 +187,7 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    const { mode, messages } = parsed.data;
+    const { mode, messages, briefAnswer } = parsed.data;
     let { chatId } = parsed.data;
 
     // Jailbreak inspection on the latest user message
@@ -154,6 +240,13 @@ export async function POST(req: Request) {
     `;
     const brand = brandRows[0] ?? {};
 
+    // Load any pending brief from the chat row.
+    const chatRow = await sql`
+      SELECT pending_brief FROM chats WHERE id = ${chatId} LIMIT 1
+    `;
+    const pendingBrief: ImageBrief | null =
+      (chatRow[0]?.pending_brief as ImageBrief | null) ?? null;
+
     // Obvious keyword match first (fast); otherwise classify with Haiku so
     // follow-ups like "make another one" / "a better version" are caught.
     let wantsImage = latest ? isImageRequest(latest.content) : false;
@@ -161,10 +254,14 @@ export async function POST(req: Request) {
       wantsImage = await classifyImageIntent(messages);
     }
 
-    // ───── IMAGE PATH (counts toward the daily image limit) ─────
-    if (wantsImage) {
+    // We're in the brief flow if any of these are true.
+    const inBriefFlow =
+      !!briefAnswer || !!pendingBrief || wantsImage;
+
+    // ───── IMAGE / BRIEF PATH ─────
+    if (inBriefFlow) {
       const allowed = await canGenerateImage(user.id);
-      if (!allowed) {
+      if (!allowed && !pendingBrief) {
         await logEvent(user.id, "limit_hit", { limitType: "images" });
         const usage = await getUsage(user.id);
         await sql`
@@ -181,17 +278,118 @@ export async function POST(req: Request) {
         });
       }
 
-      // Two-stage pipeline: text-free Ideogram image + Sharp/SVG text overlay
-      // → perfect spelling, every time. If the user specified an exact hook /
-      // headline / CTA, it is used VERBATIM (the AI never rewrites it).
-      const forced = extractForcedText(latest!.content);
-      const result = await generateMarketingImage(
-        brand,
-        latest!.content,
-        forced
-      );
+      // 1) Seed or resume the brief.
+      let brief: ImageBrief =
+        pendingBrief ?? (await inferBrief(latest?.content ?? "", brand));
+
+      // 2) Apply the user's answer (chip tap or free-text hook).
+      if (briefAnswer) {
+        brief = applyBriefAnswer(brief, briefAnswer);
+      } else if (
+        pendingBrief &&
+        nextQuestion(pendingBrief) === "hook" &&
+        latest
+      ) {
+        // User typed a free-text hook instead of tapping a chip.
+        brief = applyBriefAnswer(brief, {
+          field: "hook",
+          value: latest.content,
+        });
+      } else if (pendingBrief && latest) {
+        // User typed something else while we were waiting on a chip.
+        // Try to interpret it: re-infer to see if they filled the answer in
+        // prose ("let's go with founder story", "use brand colors").
+        const reinfer = await inferBrief(latest.content, brand);
+        brief = {
+          ...brief,
+          template: brief.template ?? reinfer.template,
+          color: brief.color ?? reinfer.color,
+          hook: brief.hook ?? reinfer.hook,
+        };
+      }
+
+      // 3) What's still missing?
+      const need = nextQuestion(brief);
+
+      if (need !== null) {
+        // Pre-generate hook options on the way to the hook question.
+        if (need === "hook" && !brief.hookOptions) {
+          brief.hookOptions = await generateHooks(
+            brief.request,
+            brand,
+            brief.template!
+          );
+        }
+
+        const actions = buildActionsFor(need, brief);
+        const reply = actions.intro;
+
+        // Persist the brief and the assistant message with the chips.
+        await sql`
+          UPDATE chats
+          SET pending_brief = ${JSON.stringify(brief)}::jsonb,
+              updated_at = now()
+          WHERE id = ${chatId}
+        `;
+        const inserted = await sql`
+          INSERT INTO chat_messages (chat_id, role, content, actions)
+          VALUES (${chatId}, 'assistant', ${reply}, ${JSON.stringify(
+            actions
+          )}::jsonb)
+          RETURNING id
+        `;
+
+        const usage = await getUsage(user.id);
+        return NextResponse.json({
+          reply,
+          actions: { ...actions, messageId: inserted[0].id },
+          usage,
+          chatId,
+          briefPending: true,
+        });
+      }
+
+      // 4) Brief is complete — generate the image.
+      if (!allowed) {
+        // Edge case: brief completed but daily limit just hit.
+        await logEvent(user.id, "limit_hit", { limitType: "images" });
+        const usage = await getUsage(user.id);
+        await sql`
+          UPDATE chats SET pending_brief = NULL WHERE id = ${chatId}
+        `;
+        await sql`
+          INSERT INTO chat_messages (chat_id, role, content)
+          VALUES (${chatId}, 'assistant', ${MVP_LIMIT_MESSAGE})
+        `;
+        return NextResponse.json({
+          reply: MVP_LIMIT_MESSAGE,
+          mvpLimit: true,
+          limitType: "images",
+          usage,
+          chatId,
+        });
+      }
+
+      // Honor any explicit headline/CTA the user gave in the very first
+      // message (e.g. headline: "..."), but only if they didn't pick a hook.
+      const forced = extractForcedText(brief.request);
+      const briefForGen: ImageBrief = {
+        ...brief,
+        hook: brief.hook || forced.headline || brief.hook,
+      };
+
+      let result;
+      try {
+        result = await generateMarketingImageFromBrief(brand, briefForGen);
+      } catch {
+        // Last-resort fallback to the legacy planner.
+        result = await generateMarketingImage(brand, brief.request, forced);
+      }
       await consumeImage(user.id);
-      await logEvent(user.id, "image_generated", { fallback: result.fallback });
+      await logEvent(user.id, "image_generated", {
+        fallback: result.fallback,
+        template: briefForGen.template,
+      });
 
       const reply = result.fallback
         ? "Here's an image — placeholder visuals (add IDEOGRAM_API_KEY for real creatives), but the text is real and editable below."
@@ -211,7 +409,11 @@ export async function POST(req: Request) {
         )}::jsonb)
         RETURNING id
       `;
-      await sql`UPDATE chats SET updated_at = now() WHERE id = ${chatId}`;
+      await sql`
+        UPDATE chats
+        SET pending_brief = NULL, updated_at = now()
+        WHERE id = ${chatId}
+      `;
 
       const usage = await getUsage(user.id);
       return NextResponse.json({

@@ -20,7 +20,7 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     const messages = await sql`
-      SELECT id, role, content, image_url, image_meta, created_at
+      SELECT id, role, content, image_url, image_meta, actions, created_at
       FROM chat_messages
       WHERE chat_id = ${params.id}
       ORDER BY created_at ASC
