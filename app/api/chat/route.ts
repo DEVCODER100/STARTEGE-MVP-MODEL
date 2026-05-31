@@ -13,6 +13,7 @@ import {
   inferBrief,
   nextQuestion,
   generateHooks,
+  generateCaption,
   TEMPLATE_LABELS,
   COLOR_LABELS,
   type ImageBrief,
@@ -391,9 +392,14 @@ export async function POST(req: Request) {
         template: briefForGen.template,
       });
 
-      const reply = result.fallback
+      const caption = await generateCaption(brief.request, brand, briefForGen);
+
+      const baseReply = result.fallback
         ? "Here's an image — placeholder visuals (add IDEOGRAM_API_KEY for real creatives), but the text is real and editable below."
         : "Here's your image. The text is rendered cleanly — tap \"Edit text\" to change the headline or CTA instantly.";
+      const reply = caption
+        ? `${baseReply}\n\nRecommended caption — copy this into your post:\n\n${caption}`
+        : baseReply;
 
       const imageMeta = {
         baseUrl: result.baseUrl,

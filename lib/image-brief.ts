@@ -251,6 +251,66 @@ Return the JSON.`,
   }
 }
 
+// ─── caption generation ───────────────────────────────────────────────────
+
+const CAPTION_SYSTEM = `You write ONE ready-to-post social-media caption for a startup's marketing image.
+
+Return STRICT JSON only:
+{"caption": "..."}
+
+Rules:
+- 2 to 4 short sentences, warm and human — not corporate.
+- Open with a scroll-stopping line that echoes the image's hook.
+- Add one line of value/context, then a soft call-to-action.
+- End with 3 to 6 relevant hashtags on the same line.
+- Use at most one emoji. India-first audience; plain, friendly English.
+- Do NOT wrap in quotes or markdown.`;
+
+export async function generateCaption(
+  request: string,
+  brand: Record<string, unknown>,
+  brief: ImageBrief
+): Promise<string | null> {
+  const ctx = [
+    brand.brand_name && `Brand: ${brand.brand_name}`,
+    brand.product && `Product: ${brand.product}`,
+    brand.target_audience && `Audience: ${brand.target_audience}`,
+    brand.usp && `USP: ${brand.usp}`,
+    brand.content_style && `Tone: ${brand.content_style}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    const r = await chat({
+      model: "haiku",
+      system: CAPTION_SYSTEM,
+      temperature: 0.8,
+      maxTokens: 300,
+      messages: [
+        {
+          role: "user",
+          content: `Template: ${brief.template ?? "general"}
+Headline on the image: ${brief.hook ?? "(none)"}
+Startup:
+${ctx || "(not set)"}
+User request: ${request}
+
+Return the JSON.`,
+        },
+      ],
+    });
+    const s = r.text.indexOf("{");
+    const e = r.text.lastIndexOf("}");
+    if (s === -1 || e === -1) throw new Error("no json");
+    const obj = JSON.parse(r.text.slice(s, e + 1));
+    const caption = typeof obj.caption === "string" ? obj.caption.trim() : "";
+    return caption.length >= 10 ? caption : null;
+  } catch {
+    return null;
+  }
+}
+
 function fallbackHooks(template: Template): string[] {
   const banks: Record<Template, string[]> = {
     product_launch: [
