@@ -4,10 +4,7 @@ import { getOrCreateUser } from "@/lib/users";
 import { getDb } from "@/lib/db";
 import { buildSystemPrompt, type Mode } from "@/lib/prompts";
 import { chat } from "@/lib/claude";
-import {
-  generateMarketingImage,
-  generateMarketingImageFromBrief,
-} from "@/lib/imagegen";
+import { generateMarketingImageFromBrief } from "@/lib/imagegen";
 import { extractForcedText } from "@/lib/imageplan";
 import {
   inferBrief,
@@ -379,13 +376,7 @@ export async function POST(req: Request) {
         hook: brief.hook || forced.headline || brief.hook,
       };
 
-      let result;
-      try {
-        result = await generateMarketingImageFromBrief(brand, briefForGen);
-      } catch {
-        // Last-resort fallback to the legacy planner.
-        result = await generateMarketingImage(brand, brief.request, forced);
-      }
+      const result = await generateMarketingImageFromBrief(brand, briefForGen);
       await consumeImage(user.id);
       await logEvent(user.id, "image_generated", {
         fallback: result.fallback,

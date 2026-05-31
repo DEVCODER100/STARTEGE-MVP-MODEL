@@ -56,7 +56,7 @@ export const COLOR_LABELS: Record<ColorMode, string> = {
 // Map brief templates → existing overlay template names (lib/overlay.ts).
 import type { TemplateName } from "./overlay";
 export const TEMPLATE_TO_OVERLAY: Record<Template, TemplateName> = {
-  product_launch: "split",
+  product_launch: "productHero",
   feature_update: "editorial",
   founder_story: "frame",
   educational: "editorial",
@@ -84,7 +84,7 @@ export const TEMPLATE_DEFAULT_CTA: Record<Template, string> = {
 // different layouts).
 export const TEMPLATE_SUBJECT: Record<Template, string> = {
   product_launch:
-    "product hero shot — the product as the centerpiece, clean studio or contextual setting, confident energy",
+    "one clean product hero visual only: a single device, product object, abstract SaaS system, or premium product scene. If a screen appears it must be blank or contain abstract UI blocks only, with zero readable text",
   feature_update:
     "product UI close-up — a device or interface fragment hinting at the new feature, modern SaaS visual",
   founder_story:
@@ -105,7 +105,7 @@ export const TEMPLATE_SUBJECT: Record<Template, string> = {
 // the generated image already anticipates the overlay layout.
 export const TEMPLATE_LAYOUT_DIRECTIVE: Record<Template, string> = {
   product_launch:
-    "Layout: leave the right half of the frame uncluttered for a product image; the left half should be visually calm so a left-aligned headline column can sit there. Stripe-style SaaS rhythm.",
+    "Layout: create a single calm hero subject in the lower or middle area, with clean negative space around it. Do not create a split-screen poster. Do not create an ad layout. Our code will add the headline and CTA later.",
   feature_update:
     "Layout: a single rounded image card with generous breathing room above and below for editorial-style headline text. Notion-like calm spacing.",
   founder_story:

@@ -456,6 +456,78 @@ const tSplit: Template = (ctx, img, headline, cta, pal) => {
 
 // 4) Big poster — solid brand color, scattered dot texture, huge UPPERCASE
 //    headline, CIRCULAR image accent, underlined text-LINK cta. (loud / gen-z)
+// Product hero: one centered visual subject with a clean headline system.
+// This replaces the old product-launch split panel that made every output
+// look like the same grey-left / phone-right ad.
+const tProductHero: Template = (ctx, img, headline, cta, pal) => {
+  paintBg(ctx, W, H, pal.bg, pal.bgEdge);
+  const m = Math.round(W * 0.075);
+  const maxW = W - m * 2;
+  const { size, lines, lineHeight } = fitHeadline(
+    ctx,
+    headline,
+    Math.round(W * 0.078),
+    Math.round(W * 0.048),
+    maxW,
+    3
+  );
+  const cx = W / 2;
+  const top = Math.round(H * 0.095);
+
+  ctx.fillStyle = pal.accent;
+  roundedRectPath(
+    ctx,
+    cx - Math.round(W * 0.055),
+    top - Math.round(W * 0.04),
+    Math.round(W * 0.11),
+    Math.max(5, Math.round(W * 0.009)),
+    Math.round(W * 0.01)
+  );
+  ctx.fill();
+
+  if (headline) drawHeadline(ctx, lines, size, lineHeight, cx, top, pal.text);
+
+  const ctaSize = Math.round(W * 0.038);
+  if (cta) {
+    drawRectButton(
+      ctx,
+      cx,
+      top + lines.length * lineHeight + Math.round(W * 0.045),
+      cta,
+      ctaSize,
+      pal.pillFill,
+      pal.pillText,
+      "center",
+      Math.round(W * 0.02),
+      true
+    );
+  }
+
+  const imageTop = Math.round(H * 0.52);
+  const imageH = Math.round(H * 0.39);
+  const imageW = Math.round(W * 0.78);
+  drawImageCover(
+    ctx,
+    img,
+    cx - imageW / 2,
+    imageTop,
+    imageW,
+    imageH,
+    Math.round(W * 0.045),
+    true
+  );
+  strokeFrame(
+    ctx,
+    cx - imageW / 2,
+    imageTop,
+    imageW,
+    imageH,
+    Math.round(W * 0.045),
+    "rgba(20,20,20,0.10)",
+    2
+  );
+};
+
 const tPoster: Template = (ctx, img, headline, cta, pal) => {
   ctx.fillStyle = pal.accent;
   ctx.fillRect(0, 0, W, H);
@@ -530,6 +602,7 @@ const tFrame: Template = (ctx, img, headline, cta, pal) => {
 };
 
 export type TemplateName =
+  | "productHero"
   | "editorial"
   | "fullbleed"
   | "split"
@@ -538,6 +611,7 @@ export type TemplateName =
   | "frame";
 
 const TEMPLATE_FNS: Record<TemplateName, Template> = {
+  productHero: tProductHero,
   editorial: tEditorial,
   fullbleed: tFullBleed,
   split: tSplit,
@@ -562,6 +636,17 @@ export const TEMPLATE_META: Record<
     visual_identity: string;
   }
 > = {
+  productHero: {
+    style_category: "product-hero",
+    best_for: ["product launches", "SaaS reveals", "startup announcements"],
+    platforms: ["instagram", "linkedin", "twitter"],
+    typography: "large clean headline with centered CTA",
+    layout_style: "headline top, one rounded product visual below",
+    color_style: "brand-tinted background + single accent",
+    emotional_tone: "clear, premium, launch-ready",
+    cta_style: "centered rounded rectangle with arrow",
+    visual_identity: "premium product hero",
+  },
   editorial: {
     style_category: "premium-minimal",
     best_for: ["founder updates", "thought leadership", "calm SaaS"],
