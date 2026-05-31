@@ -124,8 +124,8 @@ export const TEMPLATE_LAYOUT_DIRECTIVE: Record<Template, string> = {
 
 export function nextQuestion(brief: ImageBrief): BriefField | null {
   if (!brief.template) return "template";
-  if (!brief.hook) return "hook";
   if (!brief.color) return "color";
+  if (!brief.hook) return "hook";
   return null;
 }
 
@@ -152,8 +152,7 @@ const HOOK_LABELED = /(?:hook|headline|tagline)\s*[:=]\s*["'“‘]?([^"'”’\
 const HOOK_QUOTED = /["“]([^"”]{4,140})["”]/;
 
 export async function inferBrief(
-  request: string,
-  brand: Record<string, unknown>
+  request: string
 ): Promise<ImageBrief> {
   const brief: ImageBrief = { request };
 
@@ -178,9 +177,6 @@ export async function inferBrief(
     const q = request.match(HOOK_QUOTED);
     if (q) brief.hook = q[1].trim();
   }
-
-  // If brand has colors and user didn't choose a color mode, default to brand.
-  if (!brief.color && brand.brand_colors) brief.color = "brand";
 
   return brief;
 }

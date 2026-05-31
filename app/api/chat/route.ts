@@ -280,7 +280,7 @@ export async function POST(req: Request) {
 
       // 1) Seed or resume the brief.
       let brief: ImageBrief =
-        pendingBrief ?? (await inferBrief(latest?.content ?? "", brand));
+        pendingBrief ?? (await inferBrief(latest?.content ?? ""));
 
       // 2) Apply the user's answer (chip tap or free-text hook).
       if (briefAnswer) {
@@ -299,7 +299,7 @@ export async function POST(req: Request) {
         // User typed something else while we were waiting on a chip.
         // Try to interpret it: re-infer to see if they filled the answer in
         // prose ("let's go with founder story", "use brand colors").
-        const reinfer = await inferBrief(latest.content, brand);
+        const reinfer = await inferBrief(latest.content);
         brief = {
           ...brief,
           template: brief.template ?? reinfer.template,
