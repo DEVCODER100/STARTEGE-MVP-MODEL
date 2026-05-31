@@ -15,7 +15,13 @@ export type BriefField = "template" | "hook" | "color";
 export interface MessageActions {
   field: BriefField;
   intro?: string;
-  options: { label: string; value: string; isHookText?: boolean }[];
+  options: {
+    label: string;
+    value: string;
+    isHookText?: boolean;
+    description?: string;
+    preview?: "productHero" | "editorial" | "frame" | "fullbleed" | "split" | "banner" | "poster";
+  }[];
   messageId?: string;
   resolvedValue?: string;
 }

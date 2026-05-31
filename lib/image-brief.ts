@@ -32,7 +32,13 @@ export interface ImageBrief {
 export interface BriefActions {
   field: BriefField;
   intro: string;
-  options: { label: string; value: string; isHookText?: boolean }[];
+  options: {
+    label: string;
+    value: string;
+    isHookText?: boolean;
+    description?: string;
+    preview?: "productHero" | "editorial" | "frame" | "fullbleed" | "split" | "banner" | "poster";
+  }[];
   resolvedValue?: string;
 }
 
@@ -51,6 +57,17 @@ export const COLOR_LABELS: Record<ColorMode, string> = {
   brand: "Use Brand Colors",
   brand_plus_accent: "Brand + Accent",
   custom: "Custom Colors",
+};
+
+export const TEMPLATE_DESCRIPTIONS: Record<Template, string> = {
+  product_launch: "Headline top, one product visual below, CTA under the hook.",
+  feature_update: "Editorial card with product/feature visual and calm spacing.",
+  founder_story: "Large founder/workspace visual with a refined bottom headline.",
+  educational: "Text-first teaching layout with a simple supporting visual.",
+  testimonial: "Full image background with bold readable text at the bottom.",
+  problem_solution: "Strong top headline band with the visual story below.",
+  announcement: "Bold poster style with one iconic subject and big headline.",
+  milestone: "Celebration poster with big headline and one clear focal point.",
 };
 
 // Map brief templates → existing overlay template names (lib/overlay.ts).

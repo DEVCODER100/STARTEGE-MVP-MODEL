@@ -12,6 +12,8 @@ import {
   generateHooks,
   generateCaption,
   TEMPLATE_LABELS,
+  TEMPLATE_DESCRIPTIONS,
+  TEMPLATE_TO_OVERLAY,
   COLOR_LABELS,
   type ImageBrief,
   type BriefField,
@@ -85,6 +87,8 @@ function buildActionsFor(
       options: TEMPLATE_IDS.map((t) => ({
         label: TEMPLATE_LABELS[t],
         value: t,
+        description: TEMPLATE_DESCRIPTIONS[t],
+        preview: TEMPLATE_TO_OVERLAY[t],
       })),
     };
   }

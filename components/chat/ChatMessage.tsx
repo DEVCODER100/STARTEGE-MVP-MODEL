@@ -5,6 +5,107 @@ import type { ImageMeta, MessageActions, BriefField } from "@/hooks/useChat";
 
 export type Role = "user" | "assistant";
 
+type TemplatePreview =
+  | "productHero"
+  | "editorial"
+  | "frame"
+  | "fullbleed"
+  | "split"
+  | "banner"
+  | "poster";
+
+function TemplateMockup({ type }: { type?: TemplatePreview }) {
+  const visual = "rounded-md bg-gradient-to-br from-accent/25 via-bg-soft to-bg-surface border border-border";
+  const text = "rounded-full bg-text-primary/80";
+  const cta = "rounded-full bg-accent";
+
+  if (type === "productHero") {
+    return (
+      <div className="aspect-[4/5] rounded-lg border border-border bg-white p-2.5">
+        <div className={`mx-auto h-1.5 w-12 ${cta}`} />
+        <div className={`mt-3 h-2.5 w-3/4 mx-auto ${text}`} />
+        <div className={`mt-1.5 h-2.5 w-1/2 mx-auto ${text}`} />
+        <div className={`mt-2 h-3.5 w-16 mx-auto ${cta}`} />
+        <div className={`mt-5 h-[42%] w-full ${visual}`} />
+      </div>
+    );
+  }
+
+  if (type === "frame") {
+    return (
+      <div className="aspect-[4/5] rounded-lg bg-accent p-2.5">
+        <div className={`h-[58%] w-full ${visual} bg-white/90`} />
+        <div className="mt-4 h-2.5 w-4/5 mx-auto rounded-full bg-white" />
+        <div className="mt-1.5 h-2.5 w-1/2 mx-auto rounded-full bg-white/80" />
+        <div className="mt-3 h-3.5 w-16 mx-auto rounded-full bg-white" />
+      </div>
+    );
+  }
+
+  if (type === "fullbleed") {
+    return (
+      <div className={`aspect-[4/5] rounded-lg overflow-hidden ${visual} relative`}>
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 to-transparent" />
+        <div className="absolute left-4 right-4 bottom-8 space-y-1.5">
+          <div className="h-2.5 w-5/6 rounded-full bg-white" />
+          <div className="h-2.5 w-2/3 rounded-full bg-white/80" />
+          <div className="mt-3 h-3.5 w-20 rounded-full border border-white" />
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "split") {
+    return (
+      <div className="aspect-[4/5] rounded-lg overflow-hidden border border-border bg-white grid grid-cols-[55%_45%]">
+        <div className="p-3 flex flex-col justify-center">
+          <div className="h-12 w-1 bg-accent" />
+          <div className={`mt-3 h-2.5 w-5/6 ${text}`} />
+          <div className={`mt-1.5 h-2.5 w-2/3 ${text}`} />
+          <div className={`mt-3 h-3.5 w-14 ${cta}`} />
+        </div>
+        <div className={`${visual} rounded-none border-0`} />
+      </div>
+    );
+  }
+
+  if (type === "banner") {
+    return (
+      <div className="aspect-[4/5] rounded-lg overflow-hidden border border-border bg-white">
+        <div className="h-[40%] bg-accent p-4">
+          <div className="h-2.5 w-5/6 rounded-full bg-white" />
+          <div className="mt-1.5 h-2.5 w-2/3 rounded-full bg-white/80" />
+          <div className="mt-3 h-3.5 w-16 rounded-full bg-white" />
+        </div>
+        <div className={`h-[60%] ${visual} rounded-none border-0`} />
+      </div>
+    );
+  }
+
+  if (type === "poster") {
+    return (
+      <div className="aspect-[4/5] rounded-lg bg-accent p-4">
+        <div className="space-y-1.5">
+          <div className="h-3 w-full rounded-full bg-white" />
+          <div className="h-3 w-4/5 rounded-full bg-white/85" />
+          <div className="h-3 w-2/3 rounded-full bg-white/70" />
+        </div>
+        <div className="mt-8 h-20 w-20 rounded-full bg-white/85 mx-auto" />
+        <div className="mt-5 h-3 w-20 rounded-full bg-white mx-auto" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="aspect-[4/5] rounded-lg border border-border bg-white p-2.5">
+      <div className={`h-[50%] w-full ${visual}`} />
+      <div className={`mt-5 h-2.5 w-5/6 mx-auto ${text}`} />
+      <div className={`mt-1.5 h-2.5 w-2/3 mx-auto ${text}`} />
+      <div className={`mt-3 h-3.5 w-16 mx-auto ${cta}`} />
+    </div>
+  );
+}
+
 export default function ChatMessage({
   role,
   content,
@@ -96,11 +197,54 @@ export default function ChatMessage({
             </div>
 
             {actions && actions.options.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div
+                className={
+                  actions.field === "template"
+                    ? "mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3"
+                    : "mt-3 flex flex-wrap gap-2"
+                }
+              >
                 {actions.options.map((opt) => {
                   const isPicked = actions.resolvedValue === opt.value;
                   const someoneElsePicked =
                     !!actions.resolvedValue && !isPicked;
+                  if (actions.field === "template") {
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() =>
+                          onBriefAnswer?.(
+                            actions.field,
+                            opt.value,
+                            opt.label,
+                            actions.messageId
+                          )
+                        }
+                        disabled={!!disabled || !!actions.resolvedValue}
+                        className={`group rounded-card border bg-white p-3 text-left transition-colors ${
+                          isPicked
+                            ? "border-accent ring-1 ring-accent/20"
+                            : someoneElsePicked
+                              ? "border-border opacity-50"
+                              : "border-border hover:border-accent disabled:opacity-50"
+                        }`}
+                      >
+                        <div className="grid grid-cols-[78px_1fr] gap-3 items-center">
+                          <TemplateMockup type={opt.preview} />
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-text-primary">
+                              {opt.label}
+                            </div>
+                            {opt.description && (
+                              <div className="mt-1 text-xs leading-relaxed text-text-secondary">
+                                {opt.description}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  }
                   return (
                     <button
                       key={opt.value}
