@@ -21,16 +21,23 @@ export function buildIdeogramPrompt(
   }
   const t = brief.template;
 
-  return `SUBJECT
+  const productCategory = String(
+    brand.industry ?? brand.product ?? "startup product"
+  ).slice(0, 120);
+  const audience = String(brand.target_audience ?? "target users").slice(0, 120);
+  const positioning = String(brand.usp ?? brand.goal ?? "clear value").slice(0, 160);
+
+  return `RAW IMAGE ONLY - NO DESIGN TEXT
+
+SUBJECT
 ${TEMPLATE_SUBJECT[t]}.
 
-STARTUP CONTEXT
-Brand: ${String(brand.brand_name ?? "(unspecified)")}
-Product: ${String(brand.product ?? "the product")}
-Audience: ${String(brand.target_audience ?? "the target audience")}
-Industry: ${String(brand.industry ?? "startup")}
-Positioning: ${String(brand.usp ?? brand.goal ?? "clear value")}
-Founder tone: ${String(brand.content_style ?? "professional but warm")}
+CONTEXT FOR MOOD ONLY
+Product category: ${productCategory}
+Audience: ${audience}
+Positioning: ${positioning}
+Use this context only to choose the scene, materials, people, lighting, and mood.
+Do not write, spell, print, display, label, or imply any brand name, product name, slogan, caption, UI text, social handle, or marketing sentence inside the image.
 
 ${TEMPLATE_LAYOUT_DIRECTIVE[t]}
 
@@ -44,7 +51,7 @@ COLOR USAGE
 Lead with the brand accent ${direction.palette.accent}. Background bias ${direction.palette.bg}. Use the accent through lighting, props, wardrobe or surface tints — never as a flat colored wash, unless the layout above explicitly calls for a solid-color field. Avoid neon over-saturation.
 
 NEGATIVE
-No text. No letters. No numbers. No logos. No captions. No watermarks. No UI chrome, app icons, social media UI, labels, signs, badges, buttons, fake posters, or ad copy. Do not design a full advertisement. Do not make a split-screen layout. If a phone, laptop, or dashboard appears, the screen must be blank or use abstract non-readable shapes only. Purely visual. No generic "person at laptop" stock scene unless that is literally the subject above. No cluttered desktops, no scattered objects, no random hands holding random props.
+No text. No letters. No numbers. No logos. No captions. No watermarks. No UI chrome, app icons, social media UI, labels, signs, sticky notes with writing, whiteboards, posters, paper sheets with writing, badges, buttons, fake websites, fake mobile apps, fake dashboards with words, or ad copy. Do not design a full advertisement. Do not make a split-screen layout. If a phone, laptop, or dashboard appears, the screen must be blank or use abstract non-readable shapes only. Purely visual. No generic "person at laptop" stock scene unless that is literally the subject above. No cluttered desktops, no scattered objects, no random hands holding random props.
 
 QUALITY
 Ultra high quality, crisp, professional, social-feed-ready, magazine-grade lighting.`;

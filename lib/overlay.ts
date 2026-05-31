@@ -411,18 +411,25 @@ const tFullBleed: Template = (ctx, img, headline, cta, pal) => {
   const m = Math.round(W * 0.08);
   const maxW = W - m * 2;
   const head = headline.toUpperCase();
-  const { size, lines, lineHeight } = fitHeadline(ctx, head, Math.round(W * 0.092), Math.round(W * 0.055), maxW, 3);
+  const { size, lines, lineHeight } = fitHeadline(ctx, head, Math.round(W * 0.074), Math.round(W * 0.042), maxW, 4);
   const ctaSize = Math.round(W * 0.042);
   const ctaH = ctaSize + Math.round(ctaSize * 0.55) * 2;
   const gap = cta ? Math.round(W * 0.05) : 0;
   const blockH = lines.length * lineHeight + (cta ? ctaH + gap : 0);
   const blockTop = H - Math.round(W * 0.1) - blockH;
-  const scrimTop = Math.max(0, blockTop - Math.round(H * 0.16));
-  const g = ctx.createLinearGradient(0, scrimTop, 0, H);
-  g.addColorStop(0, "rgba(0,0,0,0)");
-  g.addColorStop(1, "rgba(0,0,0,0.85)");
+  const topPanelH = Math.round(H * 0.16);
+  const bottomPanelTop = Math.max(Math.round(H * 0.56), blockTop - Math.round(W * 0.08));
+
+  // Ideogram sometimes ignores "no text" and creates fake posters/UI text.
+  // Full-bleed is the riskiest template, so we cover the zones where that
+  // fake text usually appears before drawing our real overlay copy.
+  ctx.fillStyle = "rgba(250,250,247,0.94)";
+  ctx.fillRect(0, 0, W, topPanelH);
+  const g = ctx.createLinearGradient(0, bottomPanelTop, 0, H);
+  g.addColorStop(0, "rgba(0,0,0,0.90)");
+  g.addColorStop(1, "rgba(0,0,0,0.98)");
   ctx.fillStyle = g;
-  ctx.fillRect(0, scrimTop, W, H - scrimTop);
+  ctx.fillRect(0, bottomPanelTop, W, H - bottomPanelTop);
   const cx = W / 2;
   // brand-accent kicker bar above the headline
   const barW = Math.round(W * 0.14);

@@ -103,19 +103,19 @@ export const TEMPLATE_SUBJECT: Record<Template, string> = {
   product_launch:
     "one clean product hero visual only: a single device, product object, abstract SaaS system, or premium product scene. If a screen appears it must be blank or contain abstract UI blocks only, with zero readable text",
   feature_update:
-    "product UI close-up — a device or interface fragment hinting at the new feature, modern SaaS visual",
+    "product feature visual with abstract UI shapes only: clean device, interface fragments, or product object with no readable text anywhere",
   founder_story:
-    "human portrait or workspace moment, personal and editorial, warm light, magazine-cover energy",
+    "human portrait or clean workspace moment, personal and editorial, warm light, no whiteboards, no sticky notes, no papers with writing",
   educational:
     "clear diagrammatic visual — illustrative or 3D objects representing the concept, calm and instructive",
   testimonial:
-    "lifestyle shot of a customer archetype actually using the product, real-feeling photography",
+    "lifestyle shot of a customer archetype actually using the product, real-feeling photography, clean environment with no signs, no posters, no screens with text",
   problem_solution:
     "before/after split or contrast composition visualising chaos → calm, two halves of one story",
   announcement:
-    "bold poster composition with one iconic object or symbol, high contrast, attention-grabbing",
+    "bold visual with one iconic object or symbol, high contrast, attention-grabbing, but no poster text or lettering",
   milestone:
-    "celebratory but premium scene — number/milestone focal point with crowd or product context",
+    "celebratory but premium scene with one clear focal point, no numbers, no lettering, no signs, no banners",
 };
 
 // Layout directive per template — fed straight into the Ideogram prompt so
