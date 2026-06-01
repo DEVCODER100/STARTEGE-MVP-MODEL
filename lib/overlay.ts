@@ -423,12 +423,9 @@ const tFullBleed: Template = (ctx, img, headline, cta, pal) => {
   // Ideogram sometimes ignores "no text" and creates fake posters/UI text.
   // Full-bleed is the riskiest template, so we cover the zones where that
   // fake text usually appears before drawing our real overlay copy.
-  ctx.fillStyle = "rgba(250,250,247,0.94)";
+  ctx.fillStyle = pal.bg;
   ctx.fillRect(0, 0, W, topPanelH);
-  const g = ctx.createLinearGradient(0, bottomPanelTop, 0, H);
-  g.addColorStop(0, "rgba(0,0,0,0.90)");
-  g.addColorStop(1, "rgba(0,0,0,0.98)");
-  ctx.fillStyle = g;
+  ctx.fillStyle = "#050505";
   ctx.fillRect(0, bottomPanelTop, W, H - bottomPanelTop);
   const cx = W / 2;
   // brand-accent kicker bar above the headline
