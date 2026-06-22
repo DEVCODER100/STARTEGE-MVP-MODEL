@@ -11,9 +11,17 @@ export const MODELS = {
 } as const;
 
 export type ChatRole = "system" | "user" | "assistant";
+
+// Content is usually a plain string. For vision (Claude "looking" at an
+// uploaded product photo) OpenRouter also accepts an array of content parts.
+export type ChatContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+export type ChatContent = string | ChatContentPart[];
+
 export interface ChatMessage {
   role: ChatRole;
-  content: string;
+  content: ChatContent;
 }
 
 export interface ChatOptions {
@@ -80,11 +88,12 @@ export async function chat(opts: ChatOptions): Promise<ChatResult> {
 export async function chatWithClaude(
   messages: { role: string; content: string }[]
 ) {
-  const r = await chat({
-    messages: messages.filter(
-      (m): m is ChatMessage =>
+  const filtered: ChatMessage[] = messages
+    .filter(
+      (m) =>
         m.role === "user" || m.role === "assistant" || m.role === "system"
-    ),
-  });
+    )
+    .map((m) => ({ role: m.role as ChatRole, content: m.content }));
+  const r = await chat({ messages: filtered });
   return r.text;
 }

@@ -61,7 +61,7 @@ export default function ChatInterface({
     }
   }, [messages, sending]);
 
-  const onSend = (text: string) => send(text);
+  const onSend = (text: string, photoUrl?: string) => send(text, photoUrl);
 
   if (!hasStarted) {
     return (

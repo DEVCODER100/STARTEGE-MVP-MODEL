@@ -1,0 +1,168 @@
+import { chat } from "./claude";
+import type { AdCopy, ColorCombo } from "./ad-brief";
+import { COLOR_COMBO_IDS } from "./ad-brief";
+
+// AI copywriting for the Ad Studio flow:
+//  - describeProduct(): Claude vision summarises the uploaded photo (so the
+//    prompt builder / lookalike generation knows the real product).
+//  - writeAdCopy(): writes the headline / subheadline / CTA that Ideogram
+//    renders natively, and suggests a color combo.
+
+const DESCRIBE_SYSTEM = `You describe ONLY the physical product in the image for an ad designer.
+Rules:
+- 30 words max, one sentence, no preamble.
+- Mention the object, material, color, finish, and shape.
+- IGNORE any background, surface, text, logo, or watermark.
+- Do not invent a brand name. Output the description text only.`;
+
+export async function describeProduct(
+  photoDataUri: string
+): Promise<string> {
+  try {
+    const r = await chat({
+      // Vision: use Sonnet for reliable image understanding.
+      model: "sonnet",
+      system: DESCRIBE_SYSTEM,
+      temperature: 0.2,
+      maxTokens: 120,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Describe the product in this image." },
+            { type: "image_url", image_url: { url: photoDataUri } },
+          ],
+        },
+      ],
+    });
+    return r.text.trim().replace(/^["']|["']$/g, "").slice(0, 240);
+  } catch {
+    return "";
+  }
+}
+
+const COPY_SYSTEM = `You write the on-image text for a clean, modern social-media product ad.
+
+Return STRICT JSON only:
+{"headline": "...", "subhead": "...", "cta": "...", "color": "..."}
+
+Rules:
+- headline: 2 to 5 words, punchy, scroll-stopping. Title case or UPPERCASE feel. No period.
+- subhead: 3 to 8 words, supports the headline.
+- cta: 1 to 3 words button text (e.g. "Shop Now", "Discover", "Order Today").
+- color: pick ONE of: ${COLOR_COMBO_IDS.join(", ")} — choose what best fits the product/brand mood.
+- Plain, confident English. No emojis. No hashtags. No quotes inside values.`;
+
+export async function writeAdCopy(args: {
+  product: string;
+  description?: string;
+  brand: Record<string, unknown>;
+}): Promise<AdCopy & { suggestedColor?: ColorCombo }> {
+  const { product, description, brand } = args;
+  const ctx = [
+    brand.brand_name && `Brand: ${brand.brand_name}`,
+    brand.product && `Product line: ${brand.product}`,
+    brand.target_audience && `Audience: ${brand.target_audience}`,
+    brand.usp && `USP: ${brand.usp}`,
+    brand.content_style && `Tone: ${brand.content_style}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    const r = await chat({
+      model: "haiku",
+      system: COPY_SYSTEM,
+      temperature: 0.85,
+      maxTokens: 200,
+      messages: [
+        {
+          role: "user",
+          content: `Product: ${product}
+${description ? `Product details: ${description}\n` : ""}Startup:
+${ctx || "(not set)"}
+
+Return the JSON.`,
+        },
+      ],
+    });
+    const s = r.text.indexOf("{");
+    const e = r.text.lastIndexOf("}");
+    if (s === -1 || e === -1) throw new Error("no json");
+    const obj = JSON.parse(r.text.slice(s, e + 1));
+    const clean = (v: unknown, max: number) =>
+      String(v ?? "").trim().replace(/^["']|["']$/g, "").slice(0, max);
+    const headline = clean(obj.headline, 60);
+    if (!headline) throw new Error("no headline");
+    const suggested = COLOR_COMBO_IDS.includes(obj.color)
+      ? (obj.color as ColorCombo)
+      : undefined;
+    return {
+      headline,
+      subhead: clean(obj.subhead, 90),
+      cta: clean(obj.cta, 24) || "Shop Now",
+      suggestedColor: suggested,
+    };
+  } catch {
+    return fallbackCopy(product);
+  }
+}
+
+function fallbackCopy(product: string): AdCopy {
+  const name = product.trim() || "Our Product";
+  return {
+    headline: "New Arrival",
+    subhead: `Meet the ${name}`.slice(0, 90),
+    cta: "Shop Now",
+  };
+}
+
+// Patch existing copy from a natural-language edit instruction
+// ("change the headline to X", "make it say 40% off", "shorter CTA").
+const EDIT_SYSTEM = `You edit the text fields of a product ad based on a user instruction.
+
+You are given the current JSON and an instruction. Return the FULL updated JSON only:
+{"headline": "...", "subhead": "...", "cta": "..."}
+
+Rules:
+- Change ONLY what the instruction asks; keep the other fields as they were.
+- Keep lengths tight: headline 2-5 words, subhead 3-8 words, cta 1-3 words.
+- No quotes inside values, no emojis, no hashtags.`;
+
+export async function editAdCopy(
+  current: AdCopy,
+  instruction: string
+): Promise<AdCopy> {
+  try {
+    const r = await chat({
+      model: "haiku",
+      system: EDIT_SYSTEM,
+      temperature: 0.4,
+      maxTokens: 200,
+      messages: [
+        {
+          role: "user",
+          content: `Current: ${JSON.stringify(current)}
+Instruction: ${instruction}
+
+Return the updated JSON.`,
+        },
+      ],
+    });
+    const s = r.text.indexOf("{");
+    const e = r.text.lastIndexOf("}");
+    if (s === -1 || e === -1) throw new Error("no json");
+    const obj = JSON.parse(r.text.slice(s, e + 1));
+    const clean = (v: unknown, max: number, fb: string) => {
+      const out = String(v ?? "").trim().replace(/^["']|["']$/g, "").slice(0, max);
+      return out || fb;
+    };
+    return {
+      headline: clean(obj.headline, 60, current.headline),
+      subhead: clean(obj.subhead, 90, current.subhead),
+      cta: clean(obj.cta, 24, current.cta),
+    };
+  } catch {
+    return current;
+  }
+}

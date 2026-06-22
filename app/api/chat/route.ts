@@ -1,26 +1,26 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import sharp from "sharp";
 import { getOrCreateUser } from "@/lib/users";
 import { getDb } from "@/lib/db";
 import { buildSystemPrompt, type Mode } from "@/lib/prompts";
 import { chat } from "@/lib/claude";
-import { generateMarketingImageFromBrief } from "@/lib/imagegen";
-import { extractForcedText } from "@/lib/imageplan";
+import { generateCaption } from "@/lib/image-brief";
 import {
-  inferBrief,
-  nextQuestion,
-  generateHooks,
-  generateCaption,
-  TEMPLATE_LABELS,
-  TEMPLATE_DESCRIPTIONS,
-  TEMPLATE_TO_OVERLAY,
-  COLOR_LABELS,
-  type ImageBrief,
-  type BriefField,
-  type BriefActions,
-  type Template,
-  type ColorMode,
-} from "@/lib/image-brief";
+  isAdBrief,
+  isAdMode,
+  isColorCombo,
+  nextAdQuestion,
+  AD_MODE_LABELS,
+  AD_MODE_IDS,
+  COLOR_COMBO_LABELS,
+  COLOR_COMBO_IDS,
+  type AdBrief,
+  type AdField,
+} from "@/lib/ad-brief";
+import { generateAd, editAd, type AdImageMeta } from "@/lib/ad-imagegen";
+import { describeProduct, writeAdCopy, editAdCopy } from "@/lib/ad-copy";
+import { loadImageBuffer, isAllowedImageUrl } from "@/lib/storage";
 import { inspect, limits, logSecurityEvent } from "@/lib/security";
 import {
   canGeneratePost,
@@ -50,77 +50,37 @@ const Body = z.object({
     .max(40),
   briefAnswer: z
     .object({
-      field: z.enum(["template", "hook", "color"]),
+      field: z.enum(["mode", "color"]),
       value: z.string().min(1).max(400),
     })
     .nullable()
     .optional(),
+  photoUrl: z.string().max(2000).optional(),
 });
 
-const TEMPLATE_IDS: Template[] = [
-  "product_launch",
-  "feature_update",
-  "founder_story",
-  "educational",
-  "testimonial",
-  "problem_solution",
-  "announcement",
-  "milestone",
-];
-const COLOR_IDS: ColorMode[] = ["brand", "brand_plus_accent", "custom"];
-
-function isTemplate(v: string): v is Template {
-  return (TEMPLATE_IDS as string[]).includes(v);
-}
-function isColorMode(v: string): v is ColorMode {
-  return (COLOR_IDS as string[]).includes(v);
+interface AdActions {
+  field: AdField;
+  intro: string;
+  options: { label: string; value: string }[];
 }
 
-function buildActionsFor(
-  field: BriefField,
-  brief: ImageBrief
-): BriefActions {
-  if (field === "template") {
-    return {
-      field,
-      intro: "What type of image do you want to create?",
-      options: TEMPLATE_IDS.map((t) => ({
-        label: TEMPLATE_LABELS[t],
-        value: t,
-        description: TEMPLATE_DESCRIPTIONS[t],
-        preview: TEMPLATE_TO_OVERLAY[t],
-      })),
-    };
-  }
-  if (field === "hook") {
-    const hooks = brief.hookOptions ?? [];
+function buildAdActions(field: AdField): AdActions {
+  if (field === "mode") {
     return {
       field,
       intro:
-        "Pick a hook for your headline — or just type your own as your next message.",
-      options: hooks.map((h) => ({ label: h, value: h, isHookText: true })),
+        "Nice photo! How should I use it — keep your exact product, or create a stylized version?",
+      options: AD_MODE_IDS.map((m) => ({ label: AD_MODE_LABELS[m], value: m })),
     };
   }
   return {
     field,
-    intro: "Which color style should we use?",
-    options: COLOR_IDS.map((c) => ({ label: COLOR_LABELS[c], value: c })),
+    intro: "Which color style should the ad use?",
+    options: COLOR_COMBO_IDS.map((c) => ({
+      label: COLOR_COMBO_LABELS[c],
+      value: c,
+    })),
   };
-}
-
-function applyBriefAnswer(
-  brief: ImageBrief,
-  answer: { field: BriefField; value: string }
-): ImageBrief {
-  const next = { ...brief };
-  if (answer.field === "template" && isTemplate(answer.value)) {
-    next.template = answer.value;
-  } else if (answer.field === "color" && isColorMode(answer.value)) {
-    next.color = answer.value;
-  } else if (answer.field === "hook") {
-    next.hook = answer.value.trim().replace(/^["']|["']$/g, "");
-  }
-  return next;
 }
 
 const FALLBACK_REPLY = `I'm online but my AI brain isn't funded yet — the OpenRouter account needs credits to call Claude.
@@ -136,15 +96,49 @@ function makeTitle(text: string): string {
 
 // Fast keyword path: an obvious image request.
 const IMG_NOUN =
-  /\b(image|images|picture|pic|pics|visual|visuals|poster|creative|creatives|graphic|banner|photo|thumbnail|artwork|mockup)\b/i;
+  /\b(image|images|picture|pic|pics|visual|visuals|poster|creative|creatives|graphic|banner|photo|thumbnail|artwork|mockup|ad|ads|advert|advertisement)\b/i;
 const IMG_VERB =
   /\b(make|create|generate|design|need|want|give|build|draw|show|produce)\b/i;
 function isImageRequest(text: string): boolean {
   return IMG_NOUN.test(text) && IMG_VERB.test(text);
 }
 
-// For everything else (e.g. follow-ups like "make another one", "a better
-// version") a tiny Haiku call classifies intent using the conversation.
+// Edit of the most-recent ad ("change the headline to…", "make it say 40% off").
+const EDIT_RX =
+  /\b(change|replace|rename|call it|instead|edit|update|shorter|longer|bigger|smaller|headline|sub-?head|subtitle|caption|cta|button|say|wording|reword)\b/i;
+function isEditInstruction(text: string): boolean {
+  return EDIT_RX.test(text) && !isImageRequest(text);
+}
+
+// Pull a likely product name out of the request ("create an ad for a perfume
+// bottle" → "a perfume bottle").
+function deriveProductName(text?: string): string | undefined {
+  if (!text) return undefined;
+  let t = text.trim();
+  t = t.replace(
+    /^(please\s+)?(create|make|generate|design|give me|build|need|want|show me|draw|produce)\s+(me\s+)?(an?|some|the)?\s*/i,
+    ""
+  );
+  t = t.replace(
+    /\b(ad|ads|advert|advertisement|image|poster|creative|graphic|banner|visual|promo)\b/gi,
+    " "
+  );
+  t = t.replace(/^(for|of|about)\s+/i, "");
+  t = t.replace(/\s+/g, " ").trim();
+  return t.slice(0, 120) || undefined;
+}
+
+async function toDataUri(photoUrl: string): Promise<string> {
+  const buf = await loadImageBuffer(photoUrl);
+  const small = await sharp(buf)
+    .resize(512, 512, { fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 80 })
+    .toBuffer();
+  return `data:image/jpeg;base64,${small.toString("base64")}`;
+}
+
+// For everything else (e.g. follow-ups like "make another one") a tiny Haiku
+// call classifies intent using the conversation.
 async function classifyImageIntent(
   messages: { role: string; content: string }[]
 ): Promise<boolean> {
@@ -173,7 +167,6 @@ export async function POST(req: Request) {
   try {
     const user = await getOrCreateUser();
 
-    // Burst rate limit (separate from the MVP daily cap)
     const rl = limits.chat(user.id);
     if (!rl.ok) {
       return NextResponse.json(
@@ -192,7 +185,13 @@ export async function POST(req: Request) {
     const { mode, messages, briefAnswer } = parsed.data;
     let { chatId } = parsed.data;
 
-    // Jailbreak inspection on the latest user message
+    // Validate the uploaded photo URL (SSRF guard) — only our own storage.
+    const photoUrl =
+      parsed.data.photoUrl && isAllowedImageUrl(parsed.data.photoUrl)
+        ? parsed.data.photoUrl
+        : undefined;
+
+    // Jailbreak inspection on the latest user message.
     const latest = [...messages].reverse().find((m) => m.role === "user");
     if (latest) {
       const check = inspect(latest.content);
@@ -210,7 +209,7 @@ export async function POST(req: Request) {
 
     const sql = getDb();
 
-    // Ensure a chat row exists
+    // Ensure a chat row exists.
     if (!chatId) {
       const firstUserMsg =
         messages.find((m) => m.role === "user")?.content ?? "New chat";
@@ -229,7 +228,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Persist the user message
+    // Persist the user message.
     if (latest) {
       await sql`
         INSERT INTO chat_messages (chat_id, role, content)
@@ -242,25 +241,81 @@ export async function POST(req: Request) {
     `;
     const brand = brandRows[0] ?? {};
 
-    // Load any pending brief from the chat row.
+    // Load any pending ad brief from the chat row.
     const chatRow = await sql`
       SELECT pending_brief FROM chats WHERE id = ${chatId} LIMIT 1
     `;
-    const pendingBrief: ImageBrief | null =
-      (chatRow[0]?.pending_brief as ImageBrief | null) ?? null;
+    const rawPending = chatRow[0]?.pending_brief ?? null;
+    const pendingBrief: AdBrief | null = isAdBrief(rawPending) ? rawPending : null;
 
-    // Obvious keyword match first (fast); otherwise classify with Haiku so
-    // follow-ups like "make another one" / "a better version" are caught.
-    let wantsImage = latest ? isImageRequest(latest.content) : false;
-    if (!wantsImage && latest) {
+    // ───── NATURAL-LANGUAGE EDIT of the most recent ad ─────
+    if (!briefAnswer && !pendingBrief && !photoUrl && latest && isEditInstruction(latest.content)) {
+      const lastImg = await sql`
+        SELECT id, image_meta FROM chat_messages
+        WHERE chat_id = ${chatId} AND image_url IS NOT NULL
+        ORDER BY created_at DESC LIMIT 1
+      `;
+      const meta = lastImg[0]?.image_meta as AdImageMeta | null;
+      if (meta && meta.v === 2 && meta.copy) {
+        if (!(await canGenerateImage(user.id))) {
+          await logEvent(user.id, "limit_hit", { limitType: "images" });
+          const usage = await getUsage(user.id);
+          await sql`
+            INSERT INTO chat_messages (chat_id, role, content)
+            VALUES (${chatId}, 'assistant', ${MVP_LIMIT_MESSAGE})
+          `;
+          return NextResponse.json({
+            reply: MVP_LIMIT_MESSAGE,
+            mvpLimit: true,
+            limitType: "images",
+            usage,
+            chatId,
+          });
+        }
+        const newCopy = await editAdCopy(meta.copy, latest.content);
+        const result = await editAd(brand, meta, newCopy);
+        await consumeImage(user.id);
+        await logEvent(user.id, "image_generated", { kind: "nl_edit", fallback: result.fallback });
+
+        const newMeta: AdImageMeta = {
+          ...meta,
+          color: result.color,
+          copy: result.copy,
+          lever: result.lever,
+        };
+        await sql`
+          UPDATE chat_messages
+          SET image_url = ${result.url}, image_meta = ${JSON.stringify(newMeta)}::jsonb
+          WHERE id = ${lastImg[0].id}
+        `;
+        const reply = "Updated the ad with your change.";
+        const inserted = await sql`
+          INSERT INTO chat_messages (chat_id, role, content, image_url, image_meta)
+          VALUES (${chatId}, 'assistant', ${reply}, ${result.url}, ${JSON.stringify(newMeta)}::jsonb)
+          RETURNING id
+        `;
+        await sql`UPDATE chats SET updated_at = now() WHERE id = ${chatId}`;
+        const usage = await getUsage(user.id);
+        return NextResponse.json({
+          reply,
+          imageUrl: result.url,
+          imageMeta: { ...newMeta, messageId: inserted[0].id },
+          fallback: result.fallback,
+          usage,
+          chatId,
+        });
+      }
+    }
+
+    // Decide whether this turn is an image/ad request.
+    let wantsImage = !!photoUrl || (latest ? isImageRequest(latest.content) : false);
+    if (!wantsImage && latest && !pendingBrief) {
       wantsImage = await classifyImageIntent(messages);
     }
 
-    // We're in the brief flow if any of these are true.
-    const inBriefFlow =
-      !!briefAnswer || !!pendingBrief || wantsImage;
+    const inBriefFlow = !!briefAnswer || !!pendingBrief || wantsImage;
 
-    // ───── IMAGE / BRIEF PATH ─────
+    // ───── AD STUDIO PATH ─────
     if (inBriefFlow) {
       const allowed = await canGenerateImage(user.id);
       if (!allowed && !pendingBrief) {
@@ -280,67 +335,43 @@ export async function POST(req: Request) {
         });
       }
 
-      // 1) Seed or resume the brief.
-      let brief: ImageBrief =
-        pendingBrief ?? (await inferBrief(latest?.content ?? ""));
-
-      // 2) Apply the user's answer (chip tap or free-text hook).
-      if (briefAnswer) {
-        brief = applyBriefAnswer(brief, briefAnswer);
-      } else if (
-        pendingBrief &&
-        nextQuestion(pendingBrief) === "hook" &&
-        latest
-      ) {
-        // User typed a free-text hook instead of tapping a chip.
-        brief = applyBriefAnswer(brief, {
-          field: "hook",
-          value: latest.content,
-        });
-      } else if (pendingBrief && latest) {
-        // User typed something else while we were waiting on a chip.
-        // Try to interpret it: re-infer to see if they filled the answer in
-        // prose ("let's go with founder story", "use brand colors").
-        const reinfer = await inferBrief(latest.content);
-        brief = {
-          ...brief,
-          template: brief.template ?? reinfer.template,
-          color: brief.color ?? reinfer.color,
-          hook: brief.hook ?? reinfer.hook,
+      // 1) Seed or resume the ad brief.
+      let brief: AdBrief =
+        pendingBrief ?? {
+          v: 2,
+          request: latest?.content ?? "",
+          productSource: photoUrl ? "upload" : "text",
+          photoUrl,
+          productName: deriveProductName(latest?.content),
         };
+
+      // 2) Apply the chip answer.
+      if (briefAnswer) {
+        if (briefAnswer.field === "mode" && isAdMode(briefAnswer.value)) {
+          brief = { ...brief, mode: briefAnswer.value };
+        } else if (briefAnswer.field === "color" && isColorCombo(briefAnswer.value)) {
+          brief = { ...brief, color: briefAnswer.value };
+        }
+      } else if (pendingBrief && latest && !brief.productName) {
+        // User typed a product name while we were waiting.
+        brief = { ...brief, productName: deriveProductName(latest.content) };
       }
 
       // 3) What's still missing?
-      const need = nextQuestion(brief);
-
+      const need = nextAdQuestion(brief);
       if (need !== null) {
-        // Pre-generate hook options on the way to the hook question.
-        if (need === "hook" && !brief.hookOptions) {
-          brief.hookOptions = await generateHooks(
-            brief.request,
-            brand,
-            brief.template!
-          );
-        }
-
-        const actions = buildActionsFor(need, brief);
+        const actions = buildAdActions(need);
         const reply = actions.intro;
-
-        // Persist the brief and the assistant message with the chips.
         await sql`
           UPDATE chats
-          SET pending_brief = ${JSON.stringify(brief)}::jsonb,
-              updated_at = now()
+          SET pending_brief = ${JSON.stringify(brief)}::jsonb, updated_at = now()
           WHERE id = ${chatId}
         `;
         const inserted = await sql`
           INSERT INTO chat_messages (chat_id, role, content, actions)
-          VALUES (${chatId}, 'assistant', ${reply}, ${JSON.stringify(
-            actions
-          )}::jsonb)
+          VALUES (${chatId}, 'assistant', ${reply}, ${JSON.stringify(actions)}::jsonb)
           RETURNING id
         `;
-
         const usage = await getUsage(user.id);
         return NextResponse.json({
           reply,
@@ -351,14 +382,11 @@ export async function POST(req: Request) {
         });
       }
 
-      // 4) Brief is complete — generate the image.
+      // 4) Complete — generate the ad.
       if (!allowed) {
-        // Edge case: brief completed but daily limit just hit.
         await logEvent(user.id, "limit_hit", { limitType: "images" });
         const usage = await getUsage(user.id);
-        await sql`
-          UPDATE chats SET pending_brief = NULL WHERE id = ${chatId}
-        `;
+        await sql`UPDATE chats SET pending_brief = NULL WHERE id = ${chatId}`;
         await sql`
           INSERT INTO chat_messages (chat_id, role, content)
           VALUES (${chatId}, 'assistant', ${MVP_LIMIT_MESSAGE})
@@ -372,55 +400,72 @@ export async function POST(req: Request) {
         });
       }
 
-      // Honor any explicit headline/CTA the user gave in the very first
-      // message (e.g. headline: "..."), but only if they didn't pick a hook.
-      const forced = extractForcedText(brief.request);
-      const briefForGen: ImageBrief = {
-        ...brief,
-        hook: brief.hook || forced.headline || brief.hook,
-      };
+      // Vision: describe the uploaded product (cache it on the brief).
+      if (brief.productSource === "upload" && brief.photoUrl && !brief.productDescription) {
+        try {
+          brief.productDescription = await describeProduct(await toDataUri(brief.photoUrl));
+        } catch {
+          brief.productDescription = "";
+        }
+      }
 
-      const result = await generateMarketingImageFromBrief(brand, briefForGen);
+      const productName =
+        brief.productName || brief.productDescription || "the product";
+
+      // Auto-write the on-image copy.
+      if (!brief.copy) {
+        const copy = await writeAdCopy({
+          product: productName,
+          description: brief.productDescription,
+          brand,
+        });
+        brief.copy = { headline: copy.headline, subhead: copy.subhead, cta: copy.cta };
+      }
+
+      const result = await generateAd(brand, brief, `${chatId}:${Date.now()}`);
       await consumeImage(user.id);
       await logEvent(user.id, "image_generated", {
+        mode: result.mode,
         fallback: result.fallback,
-        template: briefForGen.template,
       });
 
-      const caption = await generateCaption(brief.request, brand, briefForGen);
+      const caption = await generateCaption(brief.request, brand, {
+        request: brief.request,
+        hook: brief.copy.headline,
+      });
 
       const baseReply = result.fallback
-        ? "Here's an image — placeholder visuals (add IDEOGRAM_API_KEY for real creatives), but the text is real and editable below."
-        : "Here's your image. The text is rendered cleanly — tap \"Edit text\" to change the headline or CTA instantly.";
+        ? "Here's your ad — placeholder visuals (add IDEOGRAM_API_KEY for real creatives). The headline/CTA are baked in by Ideogram."
+        : "Here's your ad — ready to post. Want changes? Just tell me (e.g. \"change the headline to …\") or use Edit below.";
       const reply = caption
         ? `${baseReply}\n\nRecommended caption — copy this into your post:\n\n${caption}`
         : baseReply;
 
-      const imageMeta = {
-        baseUrl: result.baseUrl,
-        headline: result.headline,
-        cta: result.cta,
-        direction: result.direction,
+      const meta: AdImageMeta = {
+        v: 2,
+        productName: brief.productName,
+        productDescription: brief.productDescription,
+        photoUrl: brief.photoUrl,
+        mode: result.mode,
+        color: result.color,
+        copy: result.copy,
+        lever: result.lever,
       };
 
       const inserted = await sql`
         INSERT INTO chat_messages (chat_id, role, content, image_url, image_meta)
-        VALUES (${chatId}, 'assistant', ${reply}, ${result.url}, ${JSON.stringify(
-          imageMeta
-        )}::jsonb)
+        VALUES (${chatId}, 'assistant', ${reply}, ${result.url}, ${JSON.stringify(meta)}::jsonb)
         RETURNING id
       `;
       await sql`
-        UPDATE chats
-        SET pending_brief = NULL, updated_at = now()
-        WHERE id = ${chatId}
+        UPDATE chats SET pending_brief = NULL, updated_at = now() WHERE id = ${chatId}
       `;
 
       const usage = await getUsage(user.id);
       return NextResponse.json({
         reply,
         imageUrl: result.url,
-        imageMeta: { ...imageMeta, messageId: inserted[0].id },
+        imageMeta: { ...meta, messageId: inserted[0].id },
         fallback: result.fallback,
         usage,
         chatId,

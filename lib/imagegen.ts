@@ -11,7 +11,6 @@ import {
   type CreativeDirection,
 } from "./creative-direction";
 import {
-  TEMPLATE_TO_OVERLAY,
   TEMPLATE_DEFAULT_CTA,
   type ImageBrief,
 } from "./image-brief";
@@ -134,15 +133,10 @@ export async function generateMarketingImageFromBrief(
 
   const headline = brief.hook.trim();
   const cta = (TEMPLATE_DEFAULT_CTA[brief.template] ?? "").trim();
-  const forceTemplate = TEMPLATE_TO_OVERLAY[brief.template];
 
-  const finalBuf = await compositeText(baseBuf, {
-    headline,
-    cta,
-    direction,
-    forceTemplate,
-  });
-  const url = await storeImage(finalBuf, "jpg");
+  // TEMP TEST: text overlay (step 6) disabled — return the RAW Ideogram image
+  // with no code-rendered headline/CTA. Re-enable compositeText() to restore.
+  const url = baseUrl;
 
   return {
     url,

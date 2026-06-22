@@ -37,6 +37,23 @@ export async function storeImage(
 }
 
 /**
+ * SSRF guard: only allow image URLs that WE produced — local /generated paths
+ * or Vercel Blob URLs. Anything else (arbitrary http hosts) is rejected before
+ * we ever fetch it server-side.
+ */
+export function isAllowedImageUrl(url: string): boolean {
+  if (!url) return false;
+  if (url.startsWith("/generated/")) return true;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return false;
+    return u.hostname.endsWith(".blob.vercel-storage.com");
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Load an image into a Buffer. Handles both remote URLs (http/https) and
  * local public paths (e.g. "/generated/xyz.jpg").
  */

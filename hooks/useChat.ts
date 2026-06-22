@@ -4,23 +4,30 @@ import { useCallback, useEffect, useState } from "react";
 
 export type Role = "user" | "assistant";
 
-export interface ImageMeta {
-  baseUrl: string;
+export interface AdCopy {
   headline: string;
+  subhead: string;
   cta: string;
+}
+export interface ImageMeta {
+  // Legacy overlay fields (old messages).
+  baseUrl?: string;
+  headline?: string;
+  cta?: string;
+  // v2 Ad Studio fields.
+  v?: 2;
+  copy?: AdCopy;
+  color?: string;
   messageId?: string;
 }
 
-export type BriefField = "template" | "hook" | "color";
+export type BriefField = "mode" | "color";
 export interface MessageActions {
   field: BriefField;
   intro?: string;
   options: {
     label: string;
     value: string;
-    isHookText?: boolean;
-    description?: string;
-    preview?: "productHero" | "editorial" | "frame" | "fullbleed" | "split" | "banner" | "poster";
   }[];
   messageId?: string;
   resolvedValue?: string;
@@ -45,7 +52,7 @@ export interface UseChatResult {
   error: string | null;
   chatId: string | null;
   usage: Usage | null;
-  send: (text: string) => Promise<void>;
+  send: (text: string, photoUrl?: string) => Promise<void>;
   sendBriefAnswer: (
     field: BriefField,
     value: string,
@@ -114,7 +121,8 @@ export function useChat({
     async (
       userMsg: Message,
       briefAnswer?: { field: BriefField; value: string } | null,
-      markAnsweredOnMessageId?: string
+      markAnsweredOnMessageId?: string,
+      photoUrl?: string
     ) => {
       const next = [...messages, userMsg];
       setMessages(next);
@@ -130,6 +138,7 @@ export function useChat({
             messages: next.map((m) => ({ role: m.role, content: m.content })),
             chatId,
             briefAnswer: briefAnswer ?? undefined,
+            photoUrl: photoUrl ?? undefined,
           }),
         });
         const data = await res.json();
@@ -192,8 +201,10 @@ export function useChat({
   );
 
   const send = useCallback(
-    async (text: string) => {
-      await post({ role: "user", content: text });
+    async (text: string, photoUrl?: string) => {
+      const content =
+        text || (photoUrl ? "Make an ad from this product photo" : text);
+      await post({ role: "user", content }, null, undefined, photoUrl);
     },
     [post]
   );
