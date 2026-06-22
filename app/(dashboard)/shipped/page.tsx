@@ -14,7 +14,7 @@ type Post = {
 };
 type Usage = {
   posts: { used: number; limit: number; remaining: number };
-  images: { used: number; limit: number; remaining: number };
+  images: { used: number; limit: null; remaining: null };
 };
 
 const KEYS: ("bts" | "lesson" | "outcome")[] = ["bts", "lesson", "outcome"];
@@ -269,7 +269,6 @@ export default function ShippedPage() {
   }
 
   const postsLeft = usage?.posts.remaining ?? 0;
-  const imagesLeft = usage?.images.remaining ?? 0;
   const postLimitHit = usage ? postsLeft <= 0 : false;
 
   return (
@@ -283,7 +282,7 @@ export default function ShippedPage() {
           {usage && (
             <span className="text-text-muted text-xs whitespace-nowrap">
               {usage.posts.used}/{usage.posts.limit} posts ·{" "}
-              {usage.images.used}/{usage.images.limit} images
+              {usage.images.used} images generated
             </span>
           )}
         </div>
@@ -380,7 +379,7 @@ export default function ShippedPage() {
                   Post image
                 </span>
                 <span className="text-text-muted text-[11px]">
-                  {imagesLeft} of {usage?.images.limit ?? 5} left today
+                  Unlimited during testing
                 </span>
               </div>
 
@@ -408,7 +407,7 @@ export default function ShippedPage() {
                     </a>
                     <button
                       onClick={generateImage}
-                      disabled={imgBusy || imagesLeft <= 0}
+                      disabled={imgBusy}
                       className="flex-1 px-3 py-2 rounded-lg bg-accent hover:bg-accent-light text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {imgBusy ? "Generating…" : "Generate another"}
@@ -418,14 +417,12 @@ export default function ShippedPage() {
               ) : (
                 <button
                   onClick={generateImage}
-                  disabled={imgBusy || imagesLeft <= 0}
+                  disabled={imgBusy}
                   className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-light text-white text-xs font-medium shadow-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   {imgBusy
                     ? "Generating image…"
-                    : imagesLeft <= 0
-                      ? "Daily image limit reached"
-                      : "Generate an image for this post"}
+                    : "Generate an image for this post"}
                 </button>
               )}
             </div>

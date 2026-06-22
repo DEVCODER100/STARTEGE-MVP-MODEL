@@ -5,7 +5,7 @@ import { getDb } from "./db";
 // predictable while founders test the product.
 export const MVP_LIMITS = {
   posts: 10, // text generations per day
-  images: 2, // image generations per day
+  images: null, // Unlimited during MVP image testing.
 } as const;
 
 export const MVP_LIMIT_MESSAGE =
@@ -18,7 +18,7 @@ function today(): string {
 
 export interface UsageSnapshot {
   posts: { used: number; limit: number; remaining: number };
-  images: { used: number; limit: number; remaining: number };
+  images: { used: number; limit: null; remaining: null };
 }
 
 export async function getUsage(userId: string): Promise<UsageSnapshot> {
@@ -40,7 +40,7 @@ export async function getUsage(userId: string): Promise<UsageSnapshot> {
     images: {
       used: image,
       limit: MVP_LIMITS.images,
-      remaining: Math.max(0, MVP_LIMITS.images - image),
+      remaining: null,
     },
   };
 }
@@ -51,8 +51,9 @@ export async function canGeneratePost(userId: string): Promise<boolean> {
 }
 
 export async function canGenerateImage(userId: string): Promise<boolean> {
-  const u = await getUsage(userId);
-  return u.images.remaining > 0;
+  // Image generation is unlimited during MVP testing.
+  void userId;
+  return true;
 }
 
 // Atomically +1 the post counter. Returns the new count.
