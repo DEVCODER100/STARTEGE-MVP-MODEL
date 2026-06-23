@@ -79,7 +79,7 @@ export default function ChatMessage({
   if (role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] bg-bg-accent-dk text-text-primary text-sm px-4 py-2.5 rounded-card border border-accent/20">
+        <div className="max-w-[85%] rounded-card rounded-tr-sm bg-ink px-3.5 py-2.5 text-sm text-paper">
           {content}
         </div>
       </div>
@@ -88,7 +88,7 @@ export default function ChatMessage({
 
   return (
     <div className="flex gap-3">
-      <div className="w-7 h-7 rounded-lg bg-accent text-white text-xs font-medium flex items-center justify-center flex-shrink-0 mt-0.5">
+      <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-strategy-tint text-xs font-medium text-strategy-deep">
         S
       </div>
       <div className="flex-1 min-w-0">
@@ -106,7 +106,7 @@ export default function ChatMessage({
           </div>
         ) : (
           <>
-            <div className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed">
+            <div className="whitespace-pre-wrap rounded-card rounded-tl-sm border border-rule bg-white p-3.5 text-sm leading-relaxed text-ink shadow-sm">
               {content}
             </div>
 
@@ -129,10 +129,10 @@ export default function ChatMessage({
                       disabled={!!disabled || !!actions.resolvedValue}
                       className={`text-xs px-3 py-1.5 rounded-pill border transition-colors ${
                         isPicked
-                          ? "bg-accent text-white border-accent"
+                          ? "border-strategy bg-strategy-tint font-medium text-strategy-deep ring-1 ring-strategy"
                           : someoneElsePicked
-                            ? "border-border text-text-muted opacity-50"
-                            : "border-border text-text-primary hover:border-accent hover:text-accent disabled:opacity-50"
+                            ? "border-rule text-muted opacity-50"
+                            : "border-rule bg-white text-ink hover:border-strategy hover:text-strategy-deep disabled:opacity-50"
                       }`}
                     >
                       {opt.label}
@@ -144,7 +144,7 @@ export default function ChatMessage({
 
             {url && (
               <div className="mt-3 max-w-[340px]">
-                <div className="rounded-card overflow-hidden border border-border bg-bg-soft">
+                <div className="overflow-hidden rounded-artifact border border-rule bg-canvas shadow-artifact">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={url} alt="Generated ad" className="w-full" />
                 </div>
@@ -154,14 +154,14 @@ export default function ChatMessage({
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-accent hover:text-accent-light"
+                    className="text-xs font-medium text-strategy hover:text-strategy-deep"
                   >
                     Open / download
                   </a>
                   {canEdit && !editing && (
                     <button
                       onClick={() => setEditing(true)}
-                      className="text-xs text-accent hover:text-accent-light"
+                      className="text-xs font-medium text-strategy hover:text-strategy-deep"
                     >
                       Edit text
                     </button>
@@ -169,42 +169,42 @@ export default function ChatMessage({
                 </div>
 
                 {editing && (
-                  <div className="mt-3 bg-white border border-border rounded-card p-3 space-y-2">
+                  <div className="mt-3 space-y-2 rounded-card border border-rule bg-white p-3">
                     <div>
-                      <label className="block text-text-secondary text-[11px] mb-1">
+                      <label className="mb-1 block text-[11px] text-muted">
                         Headline
                       </label>
                       <input
                         value={headline}
                         onChange={(e) => setHeadline(e.target.value)}
-                        className="w-full bg-white border border-border rounded-lg px-2.5 py-1.5 text-sm text-text-primary outline-none focus:border-accent"
+                        className="w-full rounded-[8px] border border-rule bg-white px-2.5 py-1.5 text-sm text-ink outline-none focus:border-strategy"
                       />
                     </div>
                     {canEditV2 && (
                       <div>
-                        <label className="block text-text-secondary text-[11px] mb-1">
+                        <label className="mb-1 block text-[11px] text-muted">
                           Subheadline
                         </label>
                         <input
                           value={subhead}
                           onChange={(e) => setSubhead(e.target.value)}
-                          className="w-full bg-white border border-border rounded-lg px-2.5 py-1.5 text-sm text-text-primary outline-none focus:border-accent"
+                          className="w-full rounded-[8px] border border-rule bg-white px-2.5 py-1.5 text-sm text-ink outline-none focus:border-strategy"
                         />
                       </div>
                     )}
                     <div>
-                      <label className="block text-text-secondary text-[11px] mb-1">
+                      <label className="mb-1 block text-[11px] text-muted">
                         CTA (optional)
                       </label>
                       <input
                         value={cta}
                         onChange={(e) => setCta(e.target.value)}
                         placeholder="e.g. Shop Now"
-                        className="w-full bg-white border border-border rounded-lg px-2.5 py-1.5 text-sm text-text-primary outline-none focus:border-accent"
+                        className="w-full rounded-[8px] border border-rule bg-white px-2.5 py-1.5 text-sm text-ink outline-none focus:border-strategy"
                       />
                     </div>
                     {canEditV2 && (
-                      <p className="text-text-muted text-[11px]">
+                      <p className="text-[11px] text-muted">
                         Editing regenerates the ad and uses one of today&apos;s
                         image credits.
                       </p>
@@ -215,14 +215,14 @@ export default function ChatMessage({
                     <div className="flex gap-2 pt-1">
                       <button
                         onClick={() => setEditing(false)}
-                        className="flex-1 py-1.5 rounded-lg border border-border text-text-secondary text-xs hover:border-accent"
+                        className="flex-1 rounded-[8px] border border-rule py-1.5 text-xs text-muted hover:border-strategy"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={saveEdit}
                         disabled={busy}
-                        className="flex-1 py-1.5 rounded-lg bg-accent hover:bg-accent-light text-white text-xs font-medium disabled:opacity-40"
+                        className="flex-1 rounded-[8px] bg-strategy py-1.5 text-xs font-medium text-white hover:bg-strategy-deep disabled:opacity-40"
                       >
                         {busy ? "Rendering…" : "Update image"}
                       </button>

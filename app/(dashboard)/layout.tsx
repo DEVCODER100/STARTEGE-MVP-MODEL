@@ -21,9 +21,9 @@ export default async function DashboardLayout({
   if (!rows[0]?.onboarding_complete) redirect("/onboarding");
 
   return (
-    <div className="flex min-h-screen bg-bg-primary">
+    <div className="flex h-screen overflow-hidden bg-canvas">
       <Sidebar />
-      <main className="flex-1 flex flex-col min-w-0">{children}</main>
+      <main className="flex min-w-0 flex-1 flex-col">{children}</main>
     </div>
   );
 }

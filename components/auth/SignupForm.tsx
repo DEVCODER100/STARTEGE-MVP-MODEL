@@ -6,18 +6,16 @@ import { useRouter } from "next/navigation";
 
 export default function SignupForm() {
   const router = useRouter();
-
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const hasGoogle = !!process.env.NEXT_PUBLIC_GOOGLE_ENABLED;
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!agreed) return;
     if (!name.trim()) {
       setError("Please enter your name.");
@@ -26,27 +24,18 @@ export default function SignupForm() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/auth/register", {
+      const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim(),
-          password,
-          name: name.trim(),
-        }),
+        body: JSON.stringify({ email: email.trim(), password, name: name.trim() }),
       });
-      const data = await res.json();
-      if (!res.ok) {
+      const data = await response.json();
+      if (!response.ok) {
         setError(data.error || "Could not create your account.");
         return;
       }
-      // Auto sign in
-      const r = await signIn("credentials", {
-        email: email.trim(),
-        password,
-        redirect: false,
-      });
-      if (!r || r.error) {
+      const login = await signIn("credentials", { email: email.trim(), password, redirect: false });
+      if (!login || login.error) {
         setError("Account created. Please sign in.");
         router.push("/login");
         return;
@@ -59,102 +48,81 @@ export default function SignupForm() {
   };
 
   return (
-    <div className="bg-white border border-border rounded-card p-6 shadow-card">
+    <div className="rounded-card border border-rule bg-white p-6 shadow-artifact">
       {hasGoogle && (
         <>
           <button
             type="button"
             onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-border bg-white text-text-primary text-sm hover:bg-bg-soft transition-colors"
+            className="flex w-full items-center justify-center gap-2 rounded-[9px] border border-rule bg-white py-2.5 text-sm font-medium text-ink transition-colors hover:border-ink/30 hover:bg-canvas"
           >
             <GoogleIcon /> Continue with Google
           </button>
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-text-muted text-[11px] uppercase tracking-wider">
-              or
-            </span>
-            <div className="flex-1 h-px bg-border" />
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-rule" />
+            <span className="font-mono text-[11px] uppercase tracking-wider text-muted">or</span>
+            <div className="h-px flex-1 bg-rule" />
           </div>
         </>
       )}
 
       <form onSubmit={submit} className="space-y-3">
-        <div>
-          <label className="block text-text-secondary text-xs mb-1.5">
-            Name
-          </label>
-          <input
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="What should we call you?"
-            className="w-full bg-white border border-border rounded-lg px-3 py-2.5 text-text-primary text-sm placeholder:text-text-muted focus:border-accent outline-none"
-            autoComplete="name"
-          />
-        </div>
-        <div>
-          <label className="block text-text-secondary text-xs mb-1.5">
-            Email
-          </label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter your email address"
-            className="w-full bg-white border border-border rounded-lg px-3 py-2.5 text-text-primary text-sm placeholder:text-text-muted focus:border-accent outline-none"
-            autoComplete="email"
-          />
-        </div>
-        <div>
-          <label className="block text-text-secondary text-xs mb-1.5">
-            Password
-          </label>
-          <input
-            type="password"
-            required
-            minLength={6}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 6 characters"
-            className="w-full bg-white border border-border rounded-lg px-3 py-2.5 text-text-primary text-sm placeholder:text-text-muted focus:border-accent outline-none"
-            autoComplete="new-password"
-          />
-        </div>
+        <Field label="Name" value={name} onChange={setName} placeholder="What should we call you?" autoComplete="name" />
+        <Field label="Email" type="email" value={email} onChange={setEmail} placeholder="Enter your email address" autoComplete="email" />
+        <Field label="Password" type="password" value={password} onChange={setPassword} placeholder="At least 6 characters" autoComplete="new-password" />
 
-        <label className="flex items-start gap-2.5 text-xs text-text-secondary cursor-pointer pt-1">
+        <label className="flex cursor-pointer items-start gap-2.5 pt-1 text-xs text-muted">
           <input
             type="checkbox"
             checked={agreed}
-            onChange={(e) => setAgreed(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-border text-accent focus:ring-accent"
+            onChange={(event) => setAgreed(event.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-rule text-strategy focus:ring-strategy"
           />
-          <span>
-            I agree to the{" "}
-            <a href="/terms" className="text-accent hover:text-accent-light">
-              Terms
-            </a>{" "}
-            and{" "}
-            <a href="/privacy" className="text-accent hover:text-accent-light">
-              Privacy Policy
-            </a>
-            .
-          </span>
+          <span>I agree to the <a href="/terms" className="text-strategy hover:text-strategy-deep">Terms</a> and <a href="/privacy" className="text-strategy hover:text-strategy-deep">Privacy Policy</a>.</span>
         </label>
 
         {error && <div className="text-sm text-red-600">{error}</div>}
-
         <button
           type="submit"
           disabled={busy || !agreed}
-          className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-light text-white text-sm font-medium shadow-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-full rounded-[9px] bg-strategy py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-strategy-deep disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? "Creating your account…" : "Create account"}
         </button>
       </form>
     </div>
+  );
+}
+
+function Field({
+  label,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  autoComplete,
+}: {
+  label: string;
+  type?: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  autoComplete: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium text-muted">{label}</span>
+      <input
+        type={type}
+        required
+        minLength={type === "password" ? 6 : undefined}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-[8px] border border-rule bg-white px-3 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-strategy focus:shadow-focus"
+        autoComplete={autoComplete}
+      />
+    </label>
   );
 }
 

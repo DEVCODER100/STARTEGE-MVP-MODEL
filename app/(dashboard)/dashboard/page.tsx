@@ -44,7 +44,7 @@ export default async function DashboardPage({
           {greetingWord}, <span className="italic">{firstName}</span>
         </>
       }
-      subline="Your AI marketing co-pilot — ask anything, plan a campaign, or create posts."
+      subline="Tell me what happened, what you need to make, or where the business feels stuck."
       chips={chips}
       initialChatId={chatId}
     />

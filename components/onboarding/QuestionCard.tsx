@@ -20,22 +20,22 @@ export default function QuestionCard({
   canBack?: boolean;
 }) {
   return (
-    <div className="w-full max-w-[480px] mx-auto">
-      <div className="mb-6 flex items-center justify-between text-xs text-text-muted">
+    <div className="mx-auto w-full max-w-[560px]">
+      <div className="mb-7 flex items-center justify-between font-mono text-xs uppercase tracking-wider text-muted">
         <span>
           Step {step} of {total}
         </span>
         {canBack && onBack && (
           <button
             onClick={onBack}
-            className="text-text-secondary hover:text-text-primary"
+            className="text-muted hover:text-ink"
           >
             ← Back
           </button>
         )}
       </div>
-      <h2 className="text-text-primary text-xl font-medium mb-2">{title}</h2>
-      {hint && <p className="text-text-secondary text-sm mb-6">{hint}</p>}
+      <h2 className="font-display text-3xl leading-tight text-ink">{title}</h2>
+      {hint && <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted">{hint}</p>}
       <div className="mt-6">{children}</div>
     </div>
   );
@@ -74,8 +74,8 @@ export function TapGrid({
             }}
             className={`px-3 py-3 rounded-lg text-sm border transition-colors ${
               value === o.value && !showOther
-                ? "bg-bg-accent-dk border-accent text-accent-light"
-                : "bg-bg-surface border-border text-text-secondary hover:border-accent"
+                ? "border-strategy bg-strategy-tint font-medium text-strategy-deep ring-1 ring-strategy"
+                : "border-rule bg-white text-ink hover:border-strategy"
             }`}
           >
             {o.label}
@@ -87,8 +87,8 @@ export function TapGrid({
             onClick={() => setShowOther(true)}
             className={`px-3 py-3 rounded-lg text-sm border transition-colors ${
               showOther || isOther
-                ? "bg-bg-accent-dk border-accent text-accent-light"
-                : "bg-bg-surface border-border text-text-secondary hover:border-accent"
+                ? "border-strategy bg-strategy-tint font-medium text-strategy-deep ring-1 ring-strategy"
+                : "border-rule bg-white text-ink hover:border-strategy"
             }`}
           >
             + Other
@@ -102,7 +102,7 @@ export function TapGrid({
             value={otherText}
             onChange={(e) => setOtherText(e.target.value)}
             placeholder="Type your answer…"
-            className="flex-1 bg-bg-surface border border-border rounded-lg px-3 py-2.5 text-text-primary text-sm placeholder:text-text-muted focus:border-accent outline-none"
+            className="flex-1 rounded-card border border-rule bg-white px-3 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-strategy focus:shadow-focus"
             onKeyDown={(e) => {
               if (e.key === "Enter" && otherText.trim()) {
                 onPick(otherText.trim());
@@ -113,7 +113,7 @@ export function TapGrid({
             type="button"
             disabled={!otherText.trim()}
             onClick={() => onPick(otherText.trim())}
-            className="px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-light text-white text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-[8px] bg-strategy px-4 py-2.5 text-sm font-medium text-white hover:bg-strategy-deep disabled:cursor-not-allowed disabled:opacity-40"
           >
             Save
           </button>
@@ -143,8 +143,8 @@ export function MultiTapGrid({
             onClick={() => onToggle(o.value)}
             className={`px-3 py-3 rounded-lg text-sm border transition-colors ${
               on
-                ? "bg-bg-accent-dk border-accent text-accent-light"
-                : "bg-bg-surface border-border text-text-secondary hover:border-accent"
+                ? "border-strategy bg-strategy-tint font-medium text-strategy-deep ring-1 ring-strategy"
+                : "border-rule bg-white text-ink hover:border-strategy"
             }`}
           >
             {o.label}
@@ -170,7 +170,7 @@ export function TextField({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       rows={3}
-      className="w-full bg-bg-surface border border-border rounded-lg p-3 text-text-primary text-sm placeholder:text-text-muted focus:border-accent outline-none resize-none"
+      className="w-full resize-none rounded-card border border-rule bg-white p-4 text-sm text-ink outline-none placeholder:text-muted focus:border-strategy focus:shadow-focus"
     />
   );
 }
@@ -189,7 +189,7 @@ export function PrimaryButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="w-full mt-6 py-3 rounded-lg bg-accent hover:bg-accent-light text-white font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      className="mt-6 w-full rounded-[9px] bg-strategy py-3 text-sm font-medium text-white transition-colors hover:bg-strategy-deep disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>

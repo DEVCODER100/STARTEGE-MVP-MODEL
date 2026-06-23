@@ -8,25 +8,23 @@ export default function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
   const next = search.get("next") || "/dashboard";
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const hasGoogle = !!process.env.NEXT_PUBLIC_GOOGLE_ENABLED;
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await signIn("credentials", {
+    const response = await signIn("credentials", {
       email: email.trim(),
       password,
       redirect: false,
     });
     setBusy(false);
-    if (!res || res.error) {
+    if (!response || response.error) {
       setError("Wrong email or password.");
       return;
     }
@@ -35,70 +33,69 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="bg-white border border-border rounded-card p-6 shadow-card">
+    <div className="rounded-card border border-rule bg-white p-6 shadow-artifact">
       {hasGoogle && (
         <>
           <button
             type="button"
             onClick={() => signIn("google", { callbackUrl: next })}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-border bg-white text-text-primary text-sm hover:bg-bg-soft transition-colors"
+            className="flex w-full items-center justify-center gap-2 rounded-[9px] border border-rule bg-white py-2.5 text-sm font-medium text-ink transition-colors hover:border-ink/30 hover:bg-canvas"
           >
             <GoogleIcon /> Continue with Google
           </button>
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-text-muted text-[11px] uppercase tracking-wider">
-              or
-            </span>
-            <div className="flex-1 h-px bg-border" />
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-rule" />
+            <span className="font-mono text-[11px] uppercase tracking-wider text-muted">or</span>
+            <div className="h-px flex-1 bg-rule" />
           </div>
         </>
       )}
 
       <form onSubmit={submit} className="space-y-3">
-        <div>
-          <label className="block text-text-secondary text-xs mb-1.5">
-            Email
-          </label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter your email address"
-            className="w-full bg-white border border-border rounded-lg px-3 py-2.5 text-text-primary text-sm placeholder:text-text-muted focus:border-accent outline-none"
-            autoComplete="email"
-          />
-        </div>
-        <div>
-          <label className="block text-text-secondary text-xs mb-1.5">
-            Password
-          </label>
-          <input
-            type="password"
-            required
-            minLength={6}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            className="w-full bg-white border border-border rounded-lg px-3 py-2.5 text-text-primary text-sm placeholder:text-text-muted focus:border-accent outline-none"
-            autoComplete="current-password"
-          />
-        </div>
-
-        {error && (
-          <div className="text-sm text-red-600">{error}</div>
-        )}
-
+        <Field label="Email" type="email" value={email} onChange={setEmail} placeholder="Enter your email address" autoComplete="email" />
+        <Field label="Password" type="password" value={password} onChange={setPassword} placeholder="••••••••" autoComplete="current-password" />
+        {error && <div className="text-sm text-red-600">{error}</div>}
         <button
           type="submit"
           disabled={busy}
-          className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-light text-white text-sm font-medium shadow-card disabled:opacity-40 transition-colors"
+          className="w-full rounded-[9px] bg-strategy py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-strategy-deep disabled:opacity-40"
         >
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
     </div>
+  );
+}
+
+function Field({
+  label,
+  type,
+  value,
+  onChange,
+  placeholder,
+  autoComplete,
+}: {
+  label: string;
+  type: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  autoComplete: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium text-muted">{label}</span>
+      <input
+        type={type}
+        required
+        minLength={type === "password" ? 6 : undefined}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-[8px] border border-rule bg-white px-3 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-strategy focus:shadow-focus"
+        autoComplete={autoComplete}
+      />
+    </label>
   );
 }
 

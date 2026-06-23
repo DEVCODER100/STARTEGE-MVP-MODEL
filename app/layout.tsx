@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Fraunces } from "next/font/google";
+import { Inter, Fraunces, JetBrains_Mono } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { PostHogProvider } from "@/components/PostHogProvider";
 import "./globals.css";
@@ -17,10 +17,16 @@ const fraunces = Fraunces({
   variable: "--font-fraunces",
 });
 
+const jetbrains = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "Stratège — Your AI Marketing Co-Pilot",
+  title: "Stratège — Your personal strategy desk",
   description:
-    "Stratège helps small business owners create marketing content — captions, hooks, scripts, images and campaigns — in minutes.",
+    "Stratège turns everyday business moments into clear marketing decisions and finished creative work.",
 };
 
 export default function RootLayout({
@@ -30,9 +36,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${inter.variable} ${fraunces.variable} font-sans antialiased`}
-      >
+      <body className={`${inter.variable} ${fraunces.variable} ${jetbrains.variable} font-sans antialiased`}>
         <SessionProvider>
           <PostHogProvider>{children}</PostHogProvider>
         </SessionProvider>

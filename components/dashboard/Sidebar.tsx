@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
 import { LogoMark } from "@/components/ui/Logo";
+import { Label } from "@/components/ui/primitives";
 
 interface ChatSummary {
   id: string;
@@ -13,37 +14,11 @@ interface ChatSummary {
 }
 
 const NAV = [
-  {
-    href: "/dashboard",
-    label: "AI coach",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      </svg>
-    ),
-  },
-  {
-    href: "/brand",
-    label: "Brand profile",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-      </svg>
-    ),
-  },
-  {
-    href: "/upgrade",
-    label: "Upgrade",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M20 12V22H4V12" />
-        <path d="M22 7H2v5h20V7z" />
-        <path d="M12 22V7" />
-      </svg>
-    ),
-  },
-];
+  ["/dashboard", "The desk"],
+  ["/task", "Image studio"],
+  ["/brand", "Brand book"],
+  ["/upgrade", "Plans"],
+] as const;
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -53,24 +28,17 @@ export default function Sidebar() {
   const { data: session } = useSession();
   const [chats, setChats] = useState<ChatSummary[]>([]);
 
-  const email = session?.user?.email ?? "";
-  const name = session?.user?.name || email.split("@")[0] || "You";
-  const initial = (name[0] || "S").toUpperCase();
-
   const loadChats = useCallback(() => {
     fetch("/api/chats")
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data.chats)) setChats(data.chats);
-      })
-      .catch(() => {});
+      .then((response) => response.json())
+      .then((data) => Array.isArray(data.chats) && setChats(data.chats))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
     loadChats();
-    const handler = () => loadChats();
-    window.addEventListener("stratege:chats-changed", handler);
-    return () => window.removeEventListener("stratege:chats-changed", handler);
+    window.addEventListener("stratege:chats-changed", loadChats);
+    return () => window.removeEventListener("stratege:chats-changed", loadChats);
   }, [loadChats]);
 
   const newChat = () => {
@@ -78,124 +46,71 @@ export default function Sidebar() {
     if (pathname !== "/dashboard" || activeChatId) router.push("/dashboard");
   };
 
-  const openChat = (id: string) => router.push(`/dashboard?c=${id}`);
-
-  const deleteChat = async (id: string, ev: React.MouseEvent) => {
-    ev.stopPropagation();
-    if (!confirm("Delete this chat?")) return;
-    await fetch(`/api/chats/${id}`, { method: "DELETE" });
-    setChats((cs) => cs.filter((c) => c.id !== id));
-    if (activeChatId === id) router.push("/dashboard");
-  };
+  const name = session?.user?.name || session?.user?.email?.split("@")[0] || "Founder";
+  const initial = name.slice(0, 1).toUpperCase();
 
   return (
-    <aside className="w-[230px] bg-bg-sidebar border-r border-border hidden md:flex md:flex-col">
-      <div className="px-4 py-4 border-b border-border flex items-center gap-2">
+    <aside className="hidden w-60 shrink-0 flex-col border-r border-rule bg-paper/75 lg:flex">
+      <Link href="/" className="flex h-14 items-center gap-2 border-b border-rule px-4">
         <LogoMark size={24} />
-        <span className="font-display text-lg text-text-primary">Stratège</span>
-      </div>
+        <span className="font-display text-lg text-ink">Stratège</span>
+      </Link>
 
-      <div className="px-3 pt-3">
+      <div className="px-3 py-3">
         <button
-          type="button"
           onClick={newChat}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent hover:bg-accent-light text-white text-xs font-medium shadow-card transition-colors"
+          className="flex w-full items-center gap-2 rounded-[9px] bg-strategy px-3 py-2 text-sm font-medium text-white hover:bg-strategy-deep"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          New chat
+          <span className="text-lg leading-none">+</span>
+          New work
         </button>
       </div>
 
-      <div className="px-2 pt-3 pb-1">
-        <p className="text-[10px] text-text-muted uppercase tracking-wider px-3 mb-1.5">
-          Menu
-        </p>
-        {NAV.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors mb-0.5 ${
-                active
-                  ? "bg-bg-accent-dk text-accent"
-                  : "text-text-secondary hover:bg-bg-soft hover:text-text-primary"
-              }`}
-            >
-              <span className="w-4 h-4">{item.icon}</span>
-              {item.label}
-            </Link>
-          );
-        })}
-      </div>
-
-      <div className="h-px bg-border mx-3 my-3" />
-
-      <div className="px-2 flex-1 overflow-hidden flex flex-col">
-        <p className="text-[10px] text-text-muted uppercase tracking-wider px-3 mb-1.5">
-          Recent chats
-        </p>
-        <div className="overflow-y-auto pr-1 space-y-0.5 flex-1">
-          {chats.length === 0 ? (
-            <div className="px-3 py-2 text-[11px] text-text-muted leading-relaxed">
-              No chats yet. Ask Stratège something to start.
-            </div>
-          ) : (
-            chats.map((c) => {
-              const active = activeChatId === c.id;
-              return (
-                <div
-                  key={c.id}
-                  className={`group relative rounded-md ${
-                    active ? "bg-bg-accent-dk" : "hover:bg-bg-soft"
-                  }`}
-                >
-                  <button
-                    onClick={() => openChat(c.id)}
-                    className={`block w-full text-left px-3 py-1.5 rounded-md text-xs truncate ${
-                      active
-                        ? "text-accent"
-                        : "text-text-secondary hover:text-text-primary"
-                    }`}
-                    title={c.title}
-                  >
-                    {c.title}
-                  </button>
-                  <button
-                    onClick={(e) => deleteChat(c.id, e)}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-600 px-1 transition-opacity"
-                    title="Delete chat"
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                      <path d="M10 11v6M14 11v6" />
-                    </svg>
-                  </button>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      <div className="border-t border-border p-3 flex items-center gap-3">
-        <span className="w-8 h-8 rounded-full bg-bg-accent-dk text-accent flex items-center justify-center text-xs font-medium flex-shrink-0">
-          {initial}
-        </span>
-        <div className="leading-tight min-w-0 flex-1">
-          <div className="text-xs text-text-primary font-medium truncate">
-            {name}
-          </div>
-          <button
-            onClick={() => signOut({ callbackUrl: "/" })}
-            className="text-[10px] text-text-muted hover:text-text-primary"
+      <nav className="px-2">
+        {NAV.map(([href, label]) => (
+          <Link
+            key={href}
+            href={href}
+            className={`mb-0.5 flex min-h-10 items-center rounded-md px-3 text-sm ${
+              pathname === href
+                ? "bg-white font-medium text-ink shadow-sm"
+                : "text-ink/75 hover:bg-white/60"
+            }`}
           >
-            Sign out
+            {label}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="mt-5 px-4"><Label>Recent work</Label></div>
+      <div className="mt-2 flex-1 space-y-0.5 overflow-auto px-2">
+        {chats.length ? chats.map((chat) => (
+          <button
+            key={chat.id}
+            onClick={() => router.push(`/dashboard?c=${chat.id}`)}
+            className={`block w-full rounded-md px-3 py-2 text-left ${
+              activeChatId === chat.id ? "bg-white shadow-sm" : "hover:bg-white/60"
+            }`}
+          >
+            <span className="block truncate text-sm text-ink">{chat.title}</span>
+            <span className="mt-0.5 block font-mono text-[10px] text-muted">Conversation</span>
           </button>
+        )) : (
+          <p className="px-3 py-2 text-xs leading-relaxed text-muted">
+            Your finished conversations will collect here.
+          </p>
+        )}
+      </div>
+
+      <div className="border-t border-rule p-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-tint font-medium text-accent">{initial}</span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-ink">{name}</p>
+            <button onClick={() => signOut({ callbackUrl: "/" })} className="text-xs text-muted hover:text-ink">
+              Sign out
+            </button>
+          </div>
         </div>
       </div>
     </aside>

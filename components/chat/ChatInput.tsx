@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function ChatInput({
   onSend,
@@ -20,6 +20,19 @@ export default function ChatInput({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const value = (event as CustomEvent<string | { text?: string; photoUrl?: string }>).detail;
+      if (typeof value === "string") setText(value);
+      else if (value) {
+        if (value.text) setText(value.text);
+        if (value.photoUrl) setPhotoUrl(value.photoUrl);
+      }
+    };
+    window.addEventListener("stratege:prefill", handler);
+    return () => window.removeEventListener("stratege:prefill", handler);
+  }, []);
 
   const send = () => {
     const v = text.trim();
@@ -57,20 +70,20 @@ export default function ChatInput({
     <div className="space-y-2">
       {(photoUrl || uploading || uploadError) && (
         <div className="flex items-center gap-2 text-xs">
-          {uploading && <span className="text-text-muted">Uploading photo…</span>}
+          {uploading && <span className="text-muted">Uploading photo…</span>}
           {uploadError && <span className="text-red-500">{uploadError}</span>}
           {photoUrl && !uploading && (
-            <div className="flex items-center gap-2 bg-bg-soft border border-border rounded-lg pl-1.5 pr-2 py-1">
+            <div className="flex items-center gap-2 rounded-[8px] border border-rule bg-canvas py-1 pl-1.5 pr-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={photoUrl} alt="product" className="w-8 h-8 rounded object-cover" />
-              <span className="text-text-secondary">Product photo attached</span>
+              <span className="text-muted">Product photo attached</span>
               <button
                 type="button"
                 onClick={() => {
                   setPhotoUrl(null);
                   if (fileRef.current) fileRef.current.value = "";
                 }}
-                className="text-text-muted hover:text-text-primary"
+                className="text-muted hover:text-ink"
                 aria-label="Remove photo"
               >
                 ×
@@ -80,7 +93,7 @@ export default function ChatInput({
         </div>
       )}
 
-      <div className="flex items-center gap-2 bg-white border border-border rounded-card px-3 py-2.5 shadow-card focus-within:border-accent focus-within:shadow-focus transition-all">
+      <div className="flex items-center gap-2 rounded-card border border-rule bg-white px-2.5 py-2 shadow-sm transition-all focus-within:border-strategy focus-within:shadow-focus">
         <input
           ref={fileRef}
           type="file"
@@ -93,7 +106,7 @@ export default function ChatInput({
           onClick={() => fileRef.current?.click()}
           disabled={disabled || uploading}
           title="Attach a product photo"
-          className="w-8 h-8 rounded-lg text-text-muted hover:text-accent hover:bg-bg-soft flex items-center justify-center disabled:opacity-40 transition-colors"
+          className="flex h-9 w-9 items-center justify-center rounded-[8px] border border-rule text-muted hover:border-strategy hover:text-strategy disabled:opacity-40"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
@@ -106,14 +119,14 @@ export default function ChatInput({
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder={placeholder}
           disabled={disabled}
-          className="flex-1 bg-transparent border-0 outline-none text-sm text-text-primary placeholder:text-text-muted disabled:opacity-50"
+          className="min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted disabled:opacity-50"
           style={{ boxShadow: "none" }}
         />
         <button
           type="button"
           onClick={send}
           disabled={(!text.trim() && !photoUrl) || disabled || uploading}
-          className="w-8 h-8 rounded-lg bg-accent hover:bg-accent-light text-white flex items-center justify-center disabled:opacity-40 transition-colors"
+          className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-strategy text-white hover:bg-strategy-deep disabled:opacity-40"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
             <line x1="22" y1="2" x2="11" y2="13" />
