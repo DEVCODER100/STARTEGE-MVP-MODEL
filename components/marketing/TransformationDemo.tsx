@@ -25,13 +25,8 @@ export function TransformationDemo() {
   const restart = () => setRunKey((k) => k + 1);
 
   useEffect(() => {
-    // Reduced motion: jump straight to the finished state, no loop.
-    if (reduce) {
-      setTyped(TYPED);
-      setStep(4);
-      return;
-    }
-
+    // This is the marketing hero — it always plays the looping animation so
+    // every visitor sees the product work, even with OS "reduce motion" on.
     clear();
     setTyped("");
     setStep(0);
@@ -94,7 +89,7 @@ export function TransformationDemo() {
             </span>
             <div className="flex-1 rounded-[10px] rounded-tl-sm bg-white px-3.5 py-2.5 text-[0.95rem] text-ink shadow-sm">
               {typed}
-              {step === 0 && !reduce && (
+              {step === 0 && (
                 <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-strategy align-middle" />
               )}
             </div>
