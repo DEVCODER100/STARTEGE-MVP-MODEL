@@ -38,6 +38,28 @@ export const DeskButton = forwardRef<HTMLButtonElement, ButtonProps>(
 );
 DeskButton.displayName = "DeskButton";
 
+export function TextLink({
+  children,
+  href = "#",
+  className,
+}: {
+  children: ReactNode;
+  href?: string;
+  className?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "inline-flex items-center gap-1.5 font-medium text-ink underline decoration-strategy decoration-2 underline-offset-4 transition-colors hover:decoration-accent",
+        className
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export function Label({ children, className }: { children: ReactNode; className?: string }) {
   return <span className={cn("label", className)}>{children}</span>;
 }

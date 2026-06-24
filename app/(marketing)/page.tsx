@@ -1,270 +1,255 @@
-import Image from "next/image";
-import Link from "next/link";
-import { auth } from "@/auth";
-import { LogoMark } from "@/components/ui/Logo";
-import StrategyDeskDemo from "@/components/marketing/StrategyDeskDemo";
+"use client";
 
-const contextItems = [
-  ["Audience", "Design-conscious women, 24–38"],
-  ["Voice", "Warm, candid, quietly confident"],
-  ["City", "Bengaluru"],
-  ["Goal", "Build repeat purchase"],
-  ["Platform", "Instagram + WhatsApp"],
-];
+import { motion } from "framer-motion";
+import { MarketingNav, MarketingFooter } from "@/components/marketing/Chrome";
+import { TransformationDemo } from "@/components/marketing/TransformationDemo";
+import { PricingPlans } from "@/components/marketing/PricingPlans";
+import { DeskButton, TextLink, Label } from "@/components/ui/primitives";
+import { InkUnderline } from "@/components/strategy/annotations";
+import { gallery, workflowStories, brand } from "@/lib/brand";
 
-export default async function LandingPage() {
-  const session = await auth();
-  const ctaHref = session?.user?.id ? "/dashboard" : "/signup";
-  const ctaText = session?.user?.id ? "Open my strategy desk" : "Create my first post";
+const ease = [0.22, 1, 0.36, 1] as const;
 
+function SectionLabel({ n, children }: { n: string; children: string }) {
   return (
-    <main className="marketing-page">
-      <header className="site-header">
-        <div className="site-shell site-header__inner">
-          <Link href="/" className="brand-lockup" aria-label="Stratège home">
-            <LogoMark size={25} />
-            <span>Stratège</span>
-          </Link>
-          <nav aria-label="Main navigation">
-            <Link href="#how-it-works">How it works</Link>
-            <Link href="#brand-memory">Brand memory</Link>
-            <Link href="/pricing">Pricing</Link>
-            {session?.user?.id ? (
-              <Link href="/dashboard" className="button button--small">
-                Open app
-              </Link>
-            ) : (
-              <>
-                <Link href="/login">Sign in</Link>
-                <Link href="/signup" className="button button--small">
-                  Get started
-                </Link>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+    <div className="mb-3 flex items-center gap-3">
+      <span className="font-mono text-sm text-strategy-deep">{n}</span>
+      <span className="h-px w-8 bg-rule" />
+      <Label>{children}</Label>
+    </div>
+  );
+}
 
-      <section className="hero site-shell">
-        <div className="hero__copy">
-          <p className="kicker"><span /> Private beta · built for small teams</p>
-          <h1>
-            Your business already has stories.{" "}
-            <em>Stratège turns them into marketing.</em>
-          </h1>
-          <p className="hero__lede">
-            Tell Stratège what happened today. Leave with the post, visual,
-            campaign angle, and next move—shaped around your actual brand.
-          </p>
-          <div className="hero__actions">
-            <Link href={ctaHref} className="button">{ctaText} <span>↗</span></Link>
-            <Link href="#desk" className="text-link">Watch it work <span>↓</span></Link>
-          </div>
-          <p className="microcopy">No credit card · Your first artifact is free</p>
-          <div className="margin-annotation">
-            <span>Strategy note</span>
-            <p>Start with a real business moment—not an empty prompt box.</p>
-          </div>
-        </div>
+export default function LandingPage() {
+  return (
+    <div className="min-h-screen bg-paper">
+      <MarketingNav />
 
-        <div className="hero__proof" aria-label="Example finished marketing artifact">
-          <div className="hero__proof-rule" />
-          <p className="eyebrow">Finished in one conversation</p>
-          <div className="hero__artifact">
-            <Image
-              src="/found.png"
-              alt="A finished founder marketing post created in Stratège"
-              width={1080}
-              height={1920}
-              priority
-            />
-          </div>
-          <div className="proof-caption">
-            <span>Input</span>
-            <p>“I’m building something for founders who hate marketing.”</p>
-          </div>
-          <div className="proof-mark">01</div>
-        </div>
-      </section>
-
-      <section id="desk" className="desk-section">
-        <div className="site-shell">
-          <div className="section-heading section-heading--split">
-            <div>
-              <p className="eyebrow">The strategy desk</p>
-              <h2>Watch one sentence become <em>finished work.</em></h2>
+      {/* 1 · Hero */}
+      <section className="mx-auto max-w-6xl px-5 pb-16 pt-10 sm:px-8 sm:pt-16">
+        <div className="grid items-center gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:gap-14">
+          <div>
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-rule bg-white px-3 py-1 text-xs text-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+              Private beta · for founders
             </div>
-            <p>
-              The conversation is the control layer. The artifact—the post,
-              visual, campaign, or ad—is the product.
+            <h1 className="font-display text-[2.6rem] leading-[1.05] tracking-tight text-ink sm:text-[3.4rem]">
+              Your business already has stories.{" "}
+              <InkUnderline>Stratège turns them into marketing.</InkUnderline>
+            </h1>
+            <p className="mt-6 max-w-md text-lg leading-relaxed text-muted">
+              Tell Stratège what happened today. Leave with the post, visual, campaign
+              angle, and next move—shaped around your actual brand.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-5">
+              <DeskButton href="/onboarding" size="lg">
+                Create my first post
+              </DeskButton>
+              <TextLink href="#how">Watch it work</TextLink>
+            </div>
+            <p className="mt-5 text-sm text-muted">
+              No credit card. Bring one real brand and leave with something postable.
             </p>
           </div>
-          <StrategyDeskDemo />
+
+          <div id="how">
+            <TransformationDemo />
+          </div>
         </div>
       </section>
 
-      <section id="how-it-works" className="narrative site-shell">
-        <div className="section-index">01—04</div>
-        <div className="narrative__intro">
-          <p className="eyebrow">One sentence → one week</p>
-          <h2>A small moment can do more than fill today’s feed.</h2>
+      {/* 2 · One sentence → one week */}
+      <section className="border-y border-rule bg-canvas">
+        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
+          <SectionLabel n="01">From one sentence to a week of marketing</SectionLabel>
+          <h2 className="max-w-2xl font-display text-3xl leading-tight text-ink">
+            One business moment can carry a whole week.
+          </h2>
+          <div className="mt-10 grid gap-px overflow-hidden rounded-card border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { day: "Mon", label: "The moment", text: "\"We packed our first 100 orders.\"", tone: "ink" },
+              { day: "Tue", label: "The reel", text: "Behind-the-scenes packing reel + caption in your voice", tone: "paper" },
+              { day: "Thu", label: "The proof", text: "Customer repost turned into a 'real homes' story", tone: "paper" },
+              { day: "Sun", label: "The next move", text: "WhatsApp broadcast to the 100 buyers about the next drop", tone: "green" },
+            ].map((s, i) => (
+              <motion.div
+                key={s.day}
+                initial={{ opacity: 0, y: 14 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-40px" }}
+                transition={{ duration: 0.4, delay: i * 0.08, ease }}
+                className={`flex flex-col gap-2 p-5 ${
+                  s.tone === "green" ? "bg-strategy text-paper" : s.tone === "ink" ? "bg-ink text-paper" : "bg-white"
+                }`}
+              >
+                <span className={`font-mono text-xs ${s.tone === "paper" ? "text-muted" : "text-paper/60"}`}>
+                  {s.day}
+                </span>
+                <span className={`text-xs uppercase tracking-wider ${s.tone === "paper" ? "text-strategy-deep" : "text-paper/80"}`}>
+                  {s.label}
+                </span>
+                <p className={`text-[0.95rem] leading-snug ${s.tone === "paper" ? "text-ink" : ""}`}>{s.text}</p>
+              </motion.div>
+            ))}
+          </div>
         </div>
-        <div className="narrative__steps">
-          {[
-            ["01", "Notice", "You share the milestone, customer question, new product, or messy thought."],
-            ["02", "Choose", "Stratège finds the strongest story angle and shows why it fits your brand."],
-            ["03", "Make", "The post, reel script, visual direction, WhatsApp copy, and follow-up assemble."],
-            ["04", "Learn", "You record what happened. The next recommendation gets sharper."],
-          ].map(([n, title, body]) => (
-            <article key={n}>
-              <span>{n}</span>
-              <h3>{title}</h3>
-              <p>{body}</p>
-            </article>
+      </section>
+
+      {/* 3 · Real output gallery */}
+      <section id="gallery" className="mx-auto max-w-6xl px-5 py-20 sm:px-8">
+        <SectionLabel n="02">Real output, real context</SectionLabel>
+        <h2 className="max-w-2xl font-display text-3xl leading-tight text-ink">
+          Messy input in. Marked-up, on-brand work out.
+        </h2>
+        <div className="mt-10 space-y-4">
+          {gallery.map((g, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.45, ease }}
+              className="grid gap-px overflow-hidden rounded-card border border-rule bg-rule md:grid-cols-[1.1fr_1fr_1.1fr_0.9fr]"
+            >
+              <div className="bg-paper p-5">
+                <Label>Founder said</Label>
+                <p className="mt-2 font-display text-lg italic leading-snug text-ink">{g.input}</p>
+                <p className="mt-3 text-xs text-muted">{g.business}</p>
+              </div>
+              <div className="bg-white p-5">
+                <Label>Strategic choice</Label>
+                <p className="mt-2 text-sm leading-relaxed text-ink">{g.choice}</p>
+              </div>
+              <div className="bg-white p-5">
+                <Label>Final output</Label>
+                <p className="mt-2 text-sm leading-relaxed text-ink">{g.output}</p>
+              </div>
+              <div className="flex flex-col justify-between bg-strategy-tint p-5">
+                <div>
+                  <Label>What happened</Label>
+                  <p className="mt-2 text-sm font-medium leading-snug text-strategy-deep">{g.outcome}</p>
+                </div>
+              </div>
+            </motion.div>
           ))}
         </div>
       </section>
 
-      <section className="output-gallery">
-        <div className="site-shell">
-          <div className="section-heading">
-            <p className="eyebrow">Real-looking output, with a proof trail</p>
-            <h2>Not just what to post. <em>Why this story, now.</em></h2>
-          </div>
-          <div className="gallery-layout">
-            <div className="gallery-primary">
-              <Image
-                src="/story.png"
-                alt="Long-form founder story artifact"
-                width={1080}
-                height={1920}
-              />
-              <div className="gallery-label">
-                <span>Founder story</span>
-                <p>Built from a rough voice note about a failed first product.</p>
-              </div>
-            </div>
-            <div className="gallery-side">
-              <blockquote>
-                “I built every day, but I didn’t know how to turn that into content.”
-              </blockquote>
-              <div className="choice-note">
-                <span>Strategic choice</span>
-                <p>
-                  Lead with the honest failure. It earns attention before the
-                  product appears.
-                </p>
-              </div>
-              <div className="mini-output">
-                <p className="eyebrow">Repurposed automatically</p>
-                <strong>1 founder story</strong>
-                <span>→ 3 reel hooks</span>
-                <span>→ 1 LinkedIn post</span>
-                <span>→ 2 WhatsApp updates</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="brand-memory" className="brand-memory site-shell">
-        <div className="brand-memory__copy">
-          <p className="eyebrow">Your brand stays in the room</p>
-          <h2>Personalization you can <em>see, edit, and overrule.</em></h2>
-          <p>
-            Every recommendation shows which parts of your brand shaped it.
-            Remove a detail for this request, correct it once, or approve
-            something new Stratège learned.
-          </p>
-          <Link href={ctaHref} className="text-link">Build my brand profile <span>↗</span></Link>
-        </div>
-        <div className="context-sheet">
-          <div className="context-sheet__header">
-            <div>
-              <p className="eyebrow">Using from your brand</p>
-              <strong>Studio Nila</strong>
-            </div>
-            <span>5 active details</span>
-          </div>
-          {contextItems.map(([label, value], index) => (
-            <div className="context-row" key={label}>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <p><small>{label}</small>{value}</p>
-              <button type="button" aria-label={`Remove ${label}`}>×</button>
-            </div>
-          ))}
-          <div className="context-connection">
-            <span />
-            <p>Audience + voice influenced the founder-led recommendation.</p>
-          </div>
-        </div>
-      </section>
-
-      <section className="workflows site-shell">
-        <div className="section-heading section-heading--split">
+      {/* 4 · Brand memory */}
+      <section id="memory" className="border-y border-rule bg-canvas">
+        <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[1fr_1fr] lg:items-center">
           <div>
-            <p className="eyebrow">Three common workdays</p>
-            <h2>Bring the moment. Leave with the work.</h2>
+            <SectionLabel n="03">It remembers your brand</SectionLabel>
+            <h2 className="font-display text-3xl leading-tight text-ink">
+              Personalization you can see — and{" "}
+              <InkUnderline tone="accent">override</InkUnderline>.
+            </h2>
+            <p className="mt-5 max-w-md text-muted">
+              Stratège keeps a living memory of your audience, voice, city, goals, and
+              visual identity. Every recommendation shows which detail shaped it, and you
+              can remove any of it for a single request.
+            </p>
+            <DeskButton href="/brand" variant="secondary" className="mt-6">
+              See the brand book
+            </DeskButton>
           </div>
-          <p>No mode-switching jargon. Start with the job you need done.</p>
-        </div>
-        {[
-          ["Make today’s post", "A customer sent a lovely message.", "Post + visual direction + best time", "12 min"],
-          ["Plan a launch", "The summer collection goes live Friday.", "7-day campaign + WhatsApp sequence", "One desk"],
-          ["Create an ad", "This product photo is converting organically.", "3 ad angles + copy + creative board", "3 directions"],
-        ].map(([title, input, output, meta], index) => (
-          <article className="workflow-row" key={title}>
-            <span className="workflow-row__number">0{index + 1}</span>
-            <h3>{title}</h3>
-            <div><small>You say</small><p>“{input}”</p></div>
-            <div><small>You leave with</small><p>{output}</p></div>
-            <b>{meta} ↗</b>
-          </article>
-        ))}
-      </section>
-
-      <section className="beta-note">
-        <div className="site-shell beta-note__inner">
-          <p className="eyebrow">An honest beta</p>
-          <h2>Small, early, and built close to the people using it.</h2>
-          <p>
-            Stratège is in private beta. That means no invented customer wall,
-            no fantasy metrics, and a direct line to the team shaping the product.
-          </p>
-          <Link href={ctaHref} className="button button--paper">{ctaText}</Link>
+          <div className="rounded-artifact border border-rule bg-white p-6 shadow-artifact">
+            <Label>{brand.name}&apos;s memory</Label>
+            <div className="mt-4 space-y-3 text-sm">
+              {[
+                ["Audience", "First-home nesters, metro cities"],
+                ["Voice", "Warm, plain-spoken, proud of craft"],
+                ["City", brand.city],
+                ["Goal", "Sell out indigo Dabu before Diwali"],
+                ["Avoid", "\"luxury\", \"ethnic\", \"limited time only!!\""],
+              ].map(([k, v]) => (
+                <div key={k} className="flex items-start justify-between gap-4 border-b border-rule pb-3 last:border-0">
+                  <span className="font-mono text-xs uppercase tracking-wider text-muted">{k}</span>
+                  <span className="text-right text-ink">{v}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex items-center gap-2">
+              {brand.colors.map((c) => (
+                <span key={c} className="h-8 flex-1 rounded-md border border-black/10" style={{ background: c }} />
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="pricing-preview site-shell">
-        <div>
-          <p className="eyebrow">Simple during beta</p>
-          <h2>Start free. Upgrade when Stratège becomes part of the week.</h2>
-        </div>
-        <div className="price-note">
-          <span>Private beta</span>
-          <strong>₹0</strong>
-          <p>Brand profile, strategy conversations, and your first ready-to-post artifacts.</p>
-          <Link href="/pricing" className="text-link">See complete pricing <span>↗</span></Link>
+      {/* 5 · Three workflow stories */}
+      <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8">
+        <SectionLabel n="04">Three ways founders use the desk</SectionLabel>
+        <div className="mt-8 grid gap-px overflow-hidden rounded-card border border-rule bg-rule lg:grid-cols-3">
+          {workflowStories.map((w, i) => (
+            <div key={w.title} className="flex flex-col gap-3 bg-white p-7">
+              <span className="font-mono text-sm text-accent">{String(i + 1).padStart(2, "0")}</span>
+              <Label>{w.kicker}</Label>
+              <h3 className="font-display text-xl leading-tight text-ink">{w.title}</h3>
+              <p className="text-sm leading-relaxed text-muted">{w.body}</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      <section className="final-cta site-shell">
-        <p className="eyebrow">Your next post is probably already happening</p>
-        <h2>Tell Stratège what happened today.</h2>
-        <Link href={ctaHref} className="button">{ctaText} <span>↗</span></Link>
+      {/* 6 · Honest beta proof */}
+      <section className="border-y border-rule bg-ink text-paper">
+        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
+          <SectionLabel n="05">Honest about where we are</SectionLabel>
+          <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr] lg:items-end">
+            <h2 className="font-display text-3xl leading-tight">
+              We&apos;re in private beta. No fake five-star walls, no invented numbers.
+            </h2>
+            <div className="grid grid-cols-3 gap-6 text-paper/90">
+              {[
+                ["4 min", "fastest moment → posted reel in testing"],
+                ["1 brand", "what you need to start — your own"],
+                ["0", "fake testimonials on this page"],
+              ].map(([big, small]) => (
+                <div key={small}>
+                  <div className="font-display text-3xl text-accent">{big}</div>
+                  <p className="mt-1 text-xs leading-snug text-paper/60">{small}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
-      <footer className="site-footer">
-        <div className="site-shell site-footer__inner">
-          <div className="brand-lockup"><LogoMark size={22} /><span>Stratège</span></div>
-          <p>Business moments → clear decisions → finished marketing.</p>
-          <nav>
-            <Link href="/pricing">Pricing</Link>
-            <Link href="/login">Sign in</Link>
-            <Link href="/signup">Start free</Link>
-          </nav>
+      {/* 7 · Pricing */}
+      <section className="mx-auto max-w-5xl px-5 py-20 sm:px-8">
+        <SectionLabel n="06">Pricing</SectionLabel>
+        <h2 className="mb-10 max-w-xl font-display text-3xl leading-tight text-ink">
+          Start free. Upgrade only when posting becomes a habit.
+        </h2>
+        <PricingPlans />
+      </section>
+
+      {/* 8 · Final CTA */}
+      <section className="mx-auto max-w-6xl px-5 pb-24 sm:px-8">
+        <div className="relative overflow-hidden rounded-artifact border border-strategy bg-strategy px-8 py-14 text-center text-paper canvas-grid">
+          <div className="absolute inset-0 bg-strategy/95" />
+          <div className="relative">
+            <h2 className="mx-auto max-w-2xl font-display text-3xl leading-tight sm:text-4xl">
+              Tell Stratège what happened today.
+            </h2>
+            <p className="mx-auto mt-4 max-w-md text-paper/80">
+              Bring one real brand. Leave with your first ready-to-post idea.
+            </p>
+            <div className="mt-8 flex flex-wrap justify-center gap-4">
+              <DeskButton href="/onboarding" variant="accent" size="lg">
+                Create my first post
+              </DeskButton>
+              <DeskButton href="/login" variant="secondary" size="lg">
+                I already have an account
+              </DeskButton>
+            </div>
+          </div>
         </div>
-      </footer>
-    </main>
+      </section>
+
+      <MarketingFooter />
+    </div>
   );
 }

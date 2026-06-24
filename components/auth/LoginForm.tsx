@@ -3,28 +3,63 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { LogoMark } from "@/components/ui/Logo";
+import { DeskButton } from "@/components/ui/primitives";
+
+function Field({
+  label,
+  type = "text",
+  placeholder,
+  value,
+  onChange,
+  autoComplete,
+}: {
+  label: string;
+  type?: string;
+  placeholder?: string;
+  value: string;
+  onChange: (v: string) => void;
+  autoComplete?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-medium text-ink">{label}</span>
+      <input
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        autoComplete={autoComplete}
+        required
+        className="h-12 w-full rounded-card border border-rule bg-white px-4 outline-none transition-all focus:border-strategy focus:shadow-focus"
+      />
+    </label>
+  );
+}
 
 export default function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
   const next = search.get("next") || "/dashboard";
+  const hasGoogle = !!process.env.NEXT_PUBLIC_GOOGLE_ENABLED;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasGoogle = !!process.env.NEXT_PUBLIC_GOOGLE_ENABLED;
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setBusy(true);
     setError(null);
-    const response = await signIn("credentials", {
+    const res = await signIn("credentials", {
       email: email.trim(),
       password,
       redirect: false,
     });
     setBusy(false);
-    if (!response || response.error) {
+    if (!res || res.error) {
       setError("Wrong email or password.");
       return;
     }
@@ -33,79 +68,46 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="rounded-card border border-rule bg-white p-6 shadow-artifact">
-      {hasGoogle && (
-        <>
+    <div className="flex min-h-screen items-center justify-center bg-paper px-5">
+      <div className="w-full max-w-sm">
+        <Link href="/" className="flex items-center justify-center gap-2.5" aria-label="Stratège home">
+          <LogoMark size={28} />
+          <span className="font-display text-[1.35rem] leading-none tracking-tight text-ink">
+            Stratège
+          </span>
+        </Link>
+        <h1 className="mt-8 text-center font-display text-3xl leading-tight text-ink">
+          Welcome back.
+        </h1>
+        <p className="mt-1 text-center text-sm text-muted">Your desk is where you left it.</p>
+
+        <form className="mt-8 space-y-4" onSubmit={submit}>
+          <Field label="Email" type="email" placeholder="you@brand.in" value={email} onChange={setEmail} autoComplete="email" />
+          <Field label="Password" type="password" placeholder="••••••••" value={password} onChange={setPassword} autoComplete="current-password" />
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <DeskButton type="submit" size="lg" className="w-full" disabled={busy}>
+            {busy ? "Signing in…" : "Log in"}
+          </DeskButton>
+        </form>
+
+        {hasGoogle && (
           <button
             type="button"
             onClick={() => signIn("google", { callbackUrl: next })}
-            className="flex w-full items-center justify-center gap-2 rounded-[9px] border border-rule bg-white py-2.5 text-sm font-medium text-ink transition-colors hover:border-ink/30 hover:bg-canvas"
+            className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-[9px] border border-rule bg-white text-sm font-medium text-ink hover:border-ink/30"
           >
-            <GoogleIcon /> Continue with Google
+            <svg width="16" height="16" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.7H9v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.7-3.9 2.7-6.5z"/><path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.3c-.8.6-1.9.9-3.1.9-2.4 0-4.4-1.6-5.1-3.8H.9v2.3A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.9 10.6a5.4 5.4 0 0 1 0-3.4V4.9H.9a9 9 0 0 0 0 8.1l3-2.4z"/><path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .9 4.9l3 2.3C4.6 5.1 6.6 3.6 9 3.6z"/></svg>
+            Continue with Google
           </button>
-          <div className="my-5 flex items-center gap-3">
-            <div className="h-px flex-1 bg-rule" />
-            <span className="font-mono text-[11px] uppercase tracking-wider text-muted">or</span>
-            <div className="h-px flex-1 bg-rule" />
-          </div>
-        </>
-      )}
+        )}
 
-      <form onSubmit={submit} className="space-y-3">
-        <Field label="Email" type="email" value={email} onChange={setEmail} placeholder="Enter your email address" autoComplete="email" />
-        <Field label="Password" type="password" value={password} onChange={setPassword} placeholder="••••••••" autoComplete="current-password" />
-        {error && <div className="text-sm text-red-600">{error}</div>}
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded-[9px] bg-strategy py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-strategy-deep disabled:opacity-40"
-        >
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
+        <p className="mt-6 text-center text-sm text-muted">
+          New here?{" "}
+          <Link href="/signup" className="font-medium text-strategy-deep underline underline-offset-4">
+            Create an account
+          </Link>
+        </p>
+      </div>
     </div>
-  );
-}
-
-function Field({
-  label,
-  type,
-  value,
-  onChange,
-  placeholder,
-  autoComplete,
-}: {
-  label: string;
-  type: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  autoComplete: string;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-medium text-muted">{label}</span>
-      <input
-        type={type}
-        required
-        minLength={type === "password" ? 6 : undefined}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-[8px] border border-rule bg-white px-3 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-strategy focus:shadow-focus"
-        autoComplete={autoComplete}
-      />
-    </label>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.26 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-      <path d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.83z" fill="#FBBC05"/>
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.83C6.71 7.31 9.14 5.38 12 5.38z" fill="#EA4335"/>
-    </svg>
   );
 }

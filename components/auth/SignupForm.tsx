@@ -1,22 +1,111 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { LogoMark } from "@/components/ui/Logo";
+import { DeskButton, Label } from "@/components/ui/primitives";
+import { gallery } from "@/lib/brand";
+
+function BrandLogo() {
+  return (
+    <Link href="/" className="inline-flex items-center gap-2.5" aria-label="Stratège home">
+      <LogoMark size={28} />
+      <span className="font-display text-[1.35rem] leading-none tracking-tight">Stratège</span>
+    </Link>
+  );
+}
+
+function Field({
+  label,
+  type = "text",
+  placeholder,
+  value,
+  onChange,
+  autoComplete,
+}: {
+  label: string;
+  type?: string;
+  placeholder?: string;
+  value: string;
+  onChange: (v: string) => void;
+  autoComplete?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-medium text-ink">{label}</span>
+      <input
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        autoComplete={autoComplete}
+        required
+        className="h-12 w-full rounded-card border border-rule bg-white px-4 outline-none transition-all focus:border-strategy focus:shadow-focus"
+      />
+    </label>
+  );
+}
+
+// Rotating real output + short customer story for the signup split panel.
+function RotatingProof() {
+  const reduce = useReducedMotion();
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (reduce) return;
+    const t = window.setInterval(() => setI((p) => (p + 1) % gallery.length), 4200);
+    return () => window.clearInterval(t);
+  }, [reduce]);
+  const g = gallery[i];
+  return (
+    <div className="relative hidden flex-col justify-between overflow-hidden bg-ink p-10 text-paper lg:flex">
+      <div className="canvas-grid absolute inset-0 opacity-[0.06]" />
+      <div className="relative">
+        <BrandLogo />
+      </div>
+      <div className="relative">
+        <Label>What founders made today</Label>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={i}
+            initial={reduce ? false : { opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? undefined : { opacity: 0, y: -10 }}
+            transition={{ duration: 0.4 }}
+            className="mt-3"
+          >
+            <p className="font-display text-2xl italic leading-snug text-paper">{g.input}</p>
+            <p className="mt-4 text-sm text-paper/70">{g.choice}</p>
+            <div className="mt-4 rounded-card border border-paper/20 bg-paper/[0.06] p-4">
+              <p className="text-sm text-paper/90">{g.output}</p>
+              <p className="mt-2 text-xs text-accent">{g.outcome}</p>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+      <div className="relative flex gap-1.5">
+        {gallery.map((_, j) => (
+          <span key={j} className={`h-1 rounded-full transition-all ${j === i ? "w-6 bg-accent" : "w-2 bg-paper/30"}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function SignupForm() {
   const router = useRouter();
+  const hasGoogle = !!process.env.NEXT_PUBLIC_GOOGLE_ENABLED;
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasGoogle = !!process.env.NEXT_PUBLIC_GOOGLE_ENABLED;
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!agreed) return;
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!name.trim()) {
       setError("Please enter your name.");
       return;
@@ -24,18 +113,18 @@ export default function SignupForm() {
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/auth/register", {
+      const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password, name: name.trim() }),
       });
-      const data = await response.json();
-      if (!response.ok) {
+      const data = await res.json();
+      if (!res.ok) {
         setError(data.error || "Could not create your account.");
         return;
       }
-      const login = await signIn("credentials", { email: email.trim(), password, redirect: false });
-      if (!login || login.error) {
+      const r = await signIn("credentials", { email: email.trim(), password, redirect: false });
+      if (!r || r.error) {
         setError("Account created. Please sign in.");
         router.push("/login");
         return;
@@ -48,91 +137,50 @@ export default function SignupForm() {
   };
 
   return (
-    <div className="rounded-card border border-rule bg-white p-6 shadow-artifact">
-      {hasGoogle && (
-        <>
-          <button
-            type="button"
-            onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
-            className="flex w-full items-center justify-center gap-2 rounded-[9px] border border-rule bg-white py-2.5 text-sm font-medium text-ink transition-colors hover:border-ink/30 hover:bg-canvas"
-          >
-            <GoogleIcon /> Continue with Google
-          </button>
-          <div className="my-5 flex items-center gap-3">
-            <div className="h-px flex-1 bg-rule" />
-            <span className="font-mono text-[11px] uppercase tracking-wider text-muted">or</span>
-            <div className="h-px flex-1 bg-rule" />
+    <div className="grid min-h-screen lg:grid-cols-2">
+      <RotatingProof />
+      <div className="flex items-center justify-center bg-paper px-5 py-10">
+        <div className="w-full max-w-sm">
+          <div className="lg:hidden">
+            <BrandLogo />
           </div>
-        </>
-      )}
+          <Label>Create your account</Label>
+          <h1 className="mt-1 font-display text-3xl leading-tight text-ink">
+            Leave with your first ready-to-post idea.
+          </h1>
+          <p className="mt-2 text-sm text-muted">
+            Create your brand profile and Stratège will hand you something postable before
+            you finish signing up.
+          </p>
+          <form className="mt-6 space-y-4" onSubmit={submit}>
+            <Field label="Your name" placeholder="Aarohi Mehta" value={name} onChange={setName} autoComplete="name" />
+            <Field label="Work email" type="email" placeholder="you@brand.in" value={email} onChange={setEmail} autoComplete="email" />
+            <Field label="Password" type="password" placeholder="At least 8 characters" value={password} onChange={setPassword} autoComplete="new-password" />
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <DeskButton type="submit" size="lg" className="w-full" disabled={busy}>
+              {busy ? "Creating your account…" : "Create my brand profile"}
+            </DeskButton>
+          </form>
 
-      <form onSubmit={submit} className="space-y-3">
-        <Field label="Name" value={name} onChange={setName} placeholder="What should we call you?" autoComplete="name" />
-        <Field label="Email" type="email" value={email} onChange={setEmail} placeholder="Enter your email address" autoComplete="email" />
-        <Field label="Password" type="password" value={password} onChange={setPassword} placeholder="At least 6 characters" autoComplete="new-password" />
+          {hasGoogle && (
+            <button
+              type="button"
+              onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
+              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-[9px] border border-rule bg-white text-sm font-medium text-ink hover:border-ink/30"
+            >
+              <svg width="16" height="16" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.7H9v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.7-3.9 2.7-6.5z"/><path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.3c-.8.6-1.9.9-3.1.9-2.4 0-4.4-1.6-5.1-3.8H.9v2.3A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.9 10.6a5.4 5.4 0 0 1 0-3.4V4.9H.9a9 9 0 0 0 0 8.1l3-2.4z"/><path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .9 4.9l3 2.3C4.6 5.1 6.6 3.6 9 3.6z"/></svg>
+              Continue with Google
+            </button>
+          )}
 
-        <label className="flex cursor-pointer items-start gap-2.5 pt-1 text-xs text-muted">
-          <input
-            type="checkbox"
-            checked={agreed}
-            onChange={(event) => setAgreed(event.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-rule text-strategy focus:ring-strategy"
-          />
-          <span>I agree to the <a href="/terms" className="text-strategy hover:text-strategy-deep">Terms</a> and <a href="/privacy" className="text-strategy hover:text-strategy-deep">Privacy Policy</a>.</span>
-        </label>
-
-        {error && <div className="text-sm text-red-600">{error}</div>}
-        <button
-          type="submit"
-          disabled={busy || !agreed}
-          className="w-full rounded-[9px] bg-strategy py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-strategy-deep disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {busy ? "Creating your account…" : "Create account"}
-        </button>
-      </form>
+          <p className="mt-6 text-center text-sm text-muted">
+            Already have an account?{" "}
+            <Link href="/login" className="font-medium text-strategy-deep underline underline-offset-4">
+              Log in
+            </Link>
+          </p>
+        </div>
+      </div>
     </div>
-  );
-}
-
-function Field({
-  label,
-  type = "text",
-  value,
-  onChange,
-  placeholder,
-  autoComplete,
-}: {
-  label: string;
-  type?: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  autoComplete: string;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-medium text-muted">{label}</span>
-      <input
-        type={type}
-        required
-        minLength={type === "password" ? 6 : undefined}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-[8px] border border-rule bg-white px-3 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-strategy focus:shadow-focus"
-        autoComplete={autoComplete}
-      />
-    </label>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.26 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-      <path d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.83z" fill="#FBBC05"/>
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.83C6.71 7.31 9.14 5.38 12 5.38z" fill="#EA4335"/>
-    </svg>
   );
 }
