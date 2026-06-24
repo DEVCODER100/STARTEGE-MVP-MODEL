@@ -3,7 +3,6 @@
 import { motion } from "framer-motion";
 import { MarketingNav, MarketingFooter } from "@/components/marketing/Chrome";
 import { TransformationDemo } from "@/components/marketing/TransformationDemo";
-import { PricingPlans } from "@/components/marketing/PricingPlans";
 import { DeskButton, TextLink, Label } from "@/components/ui/primitives";
 import { InkUnderline } from "@/components/strategy/annotations";
 import { gallery, workflowStories, brand } from "@/lib/brand";
@@ -217,16 +216,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 7 · Pricing */}
-      <section className="mx-auto max-w-5xl px-5 py-20 sm:px-8">
-        <SectionLabel n="06">Pricing</SectionLabel>
-        <h2 className="mb-10 max-w-xl font-display text-3xl leading-tight text-ink">
-          Start free. Upgrade only when posting becomes a habit.
-        </h2>
-        <PricingPlans />
-      </section>
-
-      {/* 8 · Final CTA */}
+      {/* Final CTA */}
       <section className="mx-auto max-w-6xl px-5 pb-24 sm:px-8">
         <div className="relative overflow-hidden rounded-artifact border border-strategy bg-strategy px-8 py-14 text-center text-paper canvas-grid">
           <div className="absolute inset-0 bg-strategy/95" />

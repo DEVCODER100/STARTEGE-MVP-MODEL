@@ -1,5 +1,4 @@
 import { MarketingNav, MarketingFooter } from "@/components/marketing/Chrome";
-import { PricingPlans } from "@/components/marketing/PricingPlans";
 import { Label } from "@/components/ui/primitives";
 
 const compare = [
@@ -32,10 +31,6 @@ export default function PricingPage() {
             One free beta plan, one Pro plan, and credit packs only if you generate a lot of
             visuals. You always know what a credit buys before you spend it.
           </p>
-        </div>
-
-        <div className="mt-10">
-          <PricingPlans />
         </div>
 
         {/* Compare */}

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { PricingPlans } from "@/components/marketing/PricingPlans";
 import { Label } from "@/components/ui/primitives";
 
 export default function UpgradePage() {
@@ -13,14 +12,22 @@ export default function UpgradePage() {
           </Link>
         </div>
         <h1 className="mt-2 font-display text-3xl leading-tight text-ink">
-          Upgrade when posting becomes a habit.
+          You&apos;re on the free private-beta plan.
         </h1>
-        <p className="mt-2 max-w-md text-muted">
-          Strategy and writing are always included. You only pay for more image
-          generations and higher limits. You&apos;re on the free private-beta plan today.
+        <p className="mt-3 max-w-md text-muted">
+          Everything is included while we&apos;re in private beta — strategy, writing, and
+          your image generations. Paid plans aren&apos;t open yet; when they are, you&apos;ll
+          see them here first.
         </p>
-        <div className="mt-8">
-          <PricingPlans inApp />
+        <div className="mt-8 rounded-artifact border border-rule bg-white p-6 shadow-artifact">
+          <Label>Current plan</Label>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="font-display text-3xl text-ink">Free</span>
+            <span className="text-sm text-muted">private beta</span>
+          </div>
+          <p className="mt-2 text-sm text-muted">
+            No credit card. No limits to worry about while you&apos;re testing.
+          </p>
         </div>
       </div>
     </div>
