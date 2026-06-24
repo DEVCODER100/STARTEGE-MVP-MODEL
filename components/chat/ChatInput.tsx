@@ -20,6 +20,19 @@ export default function ChatInput({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Grow the textarea with its content, up to a max height, then scroll.
+  const MAX_H = 168;
+  const autoGrow = () => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = Math.min(el.scrollHeight, MAX_H) + "px";
+  };
+  useEffect(() => {
+    autoGrow();
+  }, [text]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -93,7 +106,7 @@ export default function ChatInput({
         </div>
       )}
 
-      <div className="flex items-center gap-2 rounded-card border border-rule bg-white px-2.5 py-2 shadow-sm transition-all focus-within:border-strategy focus-within:shadow-focus">
+      <div className="flex items-end gap-2 rounded-card border border-rule bg-white px-2.5 py-2 shadow-sm transition-all focus-within:border-strategy focus-within:shadow-focus">
         <input
           ref={fileRef}
           type="file"
@@ -106,27 +119,34 @@ export default function ChatInput({
           onClick={() => fileRef.current?.click()}
           disabled={disabled || uploading}
           title="Attach a product photo"
-          className="flex h-9 w-9 items-center justify-center rounded-[8px] border border-rule text-muted hover:border-strategy hover:text-strategy disabled:opacity-40"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] border border-rule text-muted hover:border-strategy hover:text-strategy disabled:opacity-40"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
           </svg>
         </button>
-        <input
+        <textarea
+          ref={taRef}
           autoFocus={autoFocus}
+          rows={1}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && send()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
           placeholder={placeholder}
           disabled={disabled}
-          className="min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted disabled:opacity-50"
-          style={{ boxShadow: "none" }}
+          className="min-w-0 flex-1 resize-none self-center border-0 bg-transparent py-1.5 text-sm leading-relaxed text-ink outline-none placeholder:text-muted disabled:opacity-50"
+          style={{ boxShadow: "none", maxHeight: MAX_H }}
         />
         <button
           type="button"
           onClick={send}
           disabled={(!text.trim() && !photoUrl) || disabled || uploading}
-          className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-strategy text-white hover:bg-strategy-deep disabled:opacity-40"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-strategy text-white hover:bg-strategy-deep disabled:opacity-40"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
             <line x1="22" y1="2" x2="11" y2="13" />
