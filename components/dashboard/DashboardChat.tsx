@@ -30,9 +30,14 @@ export default function DashboardChat({
   const [mobileView, setMobileView] = useState<"talk" | "work">("talk");
   const [hubOpen, setHubOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  // Default true so the floating "Guide" launcher never flashes before we've
+  // checked localStorage; the button only appears for first-time users.
+  const [tourSeen, setTourSeen] = useState(true);
 
   useEffect(() => {
-    if (localStorage.getItem("stratege_strategy_desk_tour")) return;
+    const seen = !!localStorage.getItem("stratege_strategy_desk_tour");
+    setTourSeen(seen);
+    if (seen) return;
     const timer = window.setTimeout(() => setTourOpen(true), 800);
     return () => window.clearTimeout(timer);
   }, []);
@@ -151,17 +156,22 @@ export default function DashboardChat({
           </div>
         </section>
       </div>
-      <button
-        data-tour="help"
-        onClick={() => setTourOpen(true)}
-        className="fixed bottom-4 left-4 z-50 hidden h-11 items-center gap-2 rounded-full border border-rule bg-white px-4 text-sm font-medium text-ink shadow-raised hover:border-strategy lg:flex"
-      >
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-strategy-tint text-strategy-deep">?</span>
-        Guide
-      </button>
+      {!tourSeen && (
+        <button
+          data-tour="help"
+          onClick={() => setTourOpen(true)}
+          className="fixed bottom-4 left-4 z-50 hidden h-11 items-center gap-2 rounded-full border border-rule bg-white px-4 text-sm font-medium text-ink shadow-raised hover:border-strategy lg:flex"
+        >
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-strategy-tint text-strategy-deep">?</span>
+          Guide
+        </button>
+      )}
       <GuidedTour
         open={tourOpen}
-        onClose={() => setTourOpen(false)}
+        onClose={() => {
+          setTourOpen(false);
+          setTourSeen(true);
+        }}
         storageKey="stratege_strategy_desk_tour"
         steps={[
           { title: "Welcome to your strategy desk.", body: "Talk on the left. Finished work assembles on the canvas." },
