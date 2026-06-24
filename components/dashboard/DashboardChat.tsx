@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ChatInterface from "@/components/chat/ChatInterface";
 import { Label } from "@/components/ui/primitives";
 import HubMenu from "@/components/app/HubMenu";
@@ -34,6 +34,41 @@ export default function DashboardChat({
   // checked localStorage; the button only appears for first-time users.
   const [tourSeen, setTourSeen] = useState(true);
 
+  // Resizable / minimizable working canvas (desktop). convW = conversation
+  // column width in px; canvasMode controls split / maximized / minimized.
+  const [convW, setConvW] = useState(390);
+  const [canvasMode, setCanvasMode] = useState<"split" | "max" | "min">("split");
+  const rowRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  const startDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!draggingRef.current || !rowRef.current) return;
+      const left = rowRef.current.getBoundingClientRect().left;
+      const w = Math.min(Math.max(e.clientX - left, 300), 760);
+      setConvW(w);
+    };
+    const onUp = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
   useEffect(() => {
     const seen = !!localStorage.getItem("stratege_strategy_desk_tour");
     setTourSeen(seen);
@@ -65,8 +100,20 @@ export default function DashboardChat({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1">
-        <section className={`${mobileView === "talk" ? "flex" : "hidden"} w-full min-w-0 flex-col border-r border-rule bg-paper/45 lg:flex lg:w-[390px] lg:shrink-0`}>
+      <div
+        ref={rowRef}
+        className="flex min-h-0 flex-1"
+        style={{ "--convw": `${convW}px` } as React.CSSProperties}
+      >
+        <section
+          className={`${mobileView === "talk" ? "flex" : "hidden"} w-full min-w-0 flex-col border-r border-rule bg-paper/45 lg:flex ${
+            canvasMode === "max"
+              ? "lg:hidden"
+              : canvasMode === "min"
+                ? "lg:w-auto lg:flex-1"
+                : "lg:w-[var(--convw)] lg:shrink-0"
+          }`}
+        >
           <div className="flex items-center justify-between border-b border-rule px-4 py-2.5">
             <Label>Conversation</Label>
             <div className="flex items-center gap-2">
@@ -97,10 +144,56 @@ export default function DashboardChat({
           </div>
         </section>
 
-        <section className={`${mobileView === "work" ? "flex" : "hidden"} canvas-grid min-w-0 flex-1 flex-col lg:flex`}>
+        {/* Drag handle to resize the canvas (desktop, split mode only) */}
+        {canvasMode === "split" && (
+          <div
+            onMouseDown={startDrag}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize working canvas"
+            title="Drag to resize"
+            className="group relative z-10 hidden w-1.5 shrink-0 cursor-col-resize items-center justify-center bg-transparent hover:bg-strategy/10 lg:flex"
+          >
+            <span className="h-10 w-1 rounded-full bg-rule transition-colors group-hover:bg-strategy" />
+          </div>
+        )}
+
+        <section
+          className={`${mobileView === "work" ? "flex" : "hidden"} canvas-grid min-w-0 flex-1 flex-col lg:flex ${
+            canvasMode === "min" ? "lg:hidden" : ""
+          }`}
+        >
           <div className="flex items-center justify-between border-b border-rule bg-white/65 px-5 py-2.5">
             <Label>Working canvas</Label>
-            <span className="font-mono text-xs text-muted">Ready</span>
+            <div className="flex items-center gap-1.5">
+              <div className="hidden items-center gap-0.5 lg:flex">
+                {canvasMode !== "max" && (
+                  <button
+                    type="button"
+                    onClick={() => setCanvasMode("min")}
+                    aria-label="Minimize canvas"
+                    title="Minimize"
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-ink/5 hover:text-ink"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 8h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setCanvasMode(canvasMode === "max" ? "split" : "max")}
+                  aria-label={canvasMode === "max" ? "Restore canvas" : "Maximize canvas"}
+                  title={canvasMode === "max" ? "Restore" : "Maximize"}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-ink/5 hover:text-ink"
+                >
+                  {canvasMode === "max" ? (
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M9 7l3-3M12 4v2.5M12 4H9.5M7 9l-3 3M4 12v-2.5M4 12h2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  )}
+                </button>
+              </div>
+              <span className="font-mono text-xs text-muted">Ready</span>
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-5 lg:p-8">
             <div className="mx-auto max-w-2xl">
@@ -156,6 +249,16 @@ export default function DashboardChat({
           </div>
         </section>
       </div>
+      {canvasMode === "min" && (
+        <button
+          type="button"
+          onClick={() => setCanvasMode("split")}
+          className="fixed bottom-4 right-4 z-40 hidden h-11 items-center gap-2 rounded-full border border-rule bg-white px-4 text-sm font-medium text-ink shadow-raised hover:border-strategy hover:text-strategy-deep lg:flex"
+        >
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          Show canvas
+        </button>
+      )}
       {!tourSeen && (
         <button
           data-tour="help"
