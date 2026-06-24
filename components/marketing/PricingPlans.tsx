@@ -37,7 +37,13 @@ const plans = [
   },
 ];
 
-export function PricingPlans({ withPacks = true }: { withPacks?: boolean }) {
+export function PricingPlans({
+  withPacks = true,
+  inApp = false,
+}: {
+  withPacks?: boolean;
+  inApp?: boolean;
+}) {
   return (
     <div>
       <div className="grid gap-5 md:grid-cols-2">
@@ -72,9 +78,19 @@ export function PricingPlans({ withPacks = true }: { withPacks?: boolean }) {
                 </li>
               ))}
             </ul>
-            <DeskButton href={p.href} variant={p.featured ? "primary" : "secondary"} className="mt-6 w-full">
-              {p.cta}
-            </DeskButton>
+            {inApp ? (
+              <DeskButton
+                variant={p.featured ? "primary" : "secondary"}
+                className="mt-6 w-full"
+                disabled
+              >
+                {p.featured ? "Opening after beta" : "Your current plan"}
+              </DeskButton>
+            ) : (
+              <DeskButton href={p.href} variant={p.featured ? "primary" : "secondary"} className="mt-6 w-full">
+                {p.cta}
+              </DeskButton>
+            )}
           </div>
         ))}
       </div>
