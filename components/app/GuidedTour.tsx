@@ -26,7 +26,15 @@ export default function GuidedTour({
   const reduce = useReducedMotion();
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const step = steps[index];
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const measure = useCallback(() => {
     if (!step?.target) return setRect(null);
@@ -58,7 +66,13 @@ export default function GuidedTour({
 
   const position: CSSProperties = {};
   let transform = "";
-  if (!rect || step.placement === "center") {
+  if (isMobile) {
+    // Phones / small tablets: pin the card to the bottom so the Next button
+    // is always visible and never pushed off-screen by target positioning.
+    position.left = 16;
+    position.right = 16;
+    position.bottom = 16;
+  } else if (!rect || step.placement === "center") {
     position.left = "50%";
     position.top = "50%";
     transform = "translate(-50%, -50%)";
@@ -79,10 +93,12 @@ export default function GuidedTour({
     }
   }
 
+  const showSpotlight = !!rect && !isMobile;
+
   return createPortal(
     <div className="fixed inset-0 z-[80]" role="dialog" aria-modal="true" aria-label="Guided tour">
-      {!rect && <div className="absolute inset-0 bg-ink/60" />}
-      {rect && (
+      {!showSpotlight && <div className="absolute inset-0 bg-ink/60" />}
+      {rect && !isMobile && (
         <div
           className="pointer-events-none absolute rounded-[12px] ring-2 ring-accent"
           style={{
@@ -98,7 +114,7 @@ export default function GuidedTour({
         key={index}
         initial={reduce ? false : { opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        className="absolute w-80 rounded-artifact border border-rule bg-white p-4 shadow-raised"
+        className={`absolute rounded-artifact border border-rule bg-white p-4 shadow-raised ${isMobile ? "" : "w-80"}`}
         style={{ ...position, transform }}
       >
         <div className="flex items-center justify-between">
