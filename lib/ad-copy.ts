@@ -1,6 +1,29 @@
 import { chat } from "./claude";
 import type { AdCopy, ColorCombo } from "./ad-brief";
 import { COLOR_COMBO_IDS } from "./ad-brief";
+import {
+  isStrategeBrand,
+  isBannedHeadline,
+  isBannedCta,
+  STRATEGE_HEADLINE_GUIDE,
+  STRATEGE_SUBHEAD_GUIDE,
+  STRATEGE_CTA_GUIDE,
+  strategeHeadlineFallback,
+  strategeSubheadFallback,
+  strategeCtaFallback,
+} from "./brand-locks";
+
+function smallHash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
+}
+
+const cleanStr = (v: unknown, max: number) =>
+  String(v ?? "").trim().replace(/^["']|["']$/g, "").slice(0, max);
 
 // AI copywriting for the Ad Studio flow:
 //  - describeProduct(): Claude vision summarises the uploaded photo (so the
@@ -53,12 +76,87 @@ Rules:
 - color: pick ONE of: ${COLOR_COMBO_IDS.join(", ")} — choose what best fits the product/brand mood.
 - Plain, confident English. No emojis. No hashtags. No quotes inside values.`;
 
+// ─── Stratège self-marketing copy (Lock 3 + Lock 4) ─────────────────────────
+const STRATEGE_COPY_SYSTEM = `You write the on-image text for a Stratège self-marketing ad.
+
+Return STRICT JSON only:
+{"headline": "...", "subhead": "...", "cta": "..."}
+
+${STRATEGE_HEADLINE_GUIDE}
+
+${STRATEGE_SUBHEAD_GUIDE}
+
+${STRATEGE_CTA_GUIDE}
+
+Lengths & form:
+- headline: 2 to 7 words. Founder voice — a question, a truth, or a specific moment. Not ALL CAPS marketing.
+- subhead: 4 to 10 words, a concrete moment, not a claim.
+- No emojis, no hashtags, no quotes inside values.`;
+
+// Generates Stratège copy and validates it against the banned patterns,
+// regenerating up to 3 times. Curated on-brand fallbacks if it never passes.
+async function writeStrategeCopy(args: {
+  product: string;
+  brand: Record<string, unknown>;
+}): Promise<AdCopy & { suggestedColor?: ColorCombo }> {
+  const seed = String(args.brand.brand_name ?? args.product ?? "stratege");
+  const h = smallHash(seed);
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const r = await chat({
+        model: "haiku",
+        system: STRATEGE_COPY_SYSTEM,
+        temperature: 0.9 + attempt * 0.05,
+        maxTokens: 200,
+        messages: [
+          {
+            role: "user",
+            content: `Write a fresh Stratège ad: headline, subhead, CTA.${
+              attempt
+                ? " Your previous attempt sounded too generic/corporate — pick a more specific founder moment, question, or feeling."
+                : ""
+            }\n\nReturn the JSON.`,
+          },
+        ],
+      });
+      const s = r.text.indexOf("{");
+      const e = r.text.lastIndexOf("}");
+      if (s === -1 || e === -1) continue;
+      const obj = JSON.parse(r.text.slice(s, e + 1));
+      const headline = cleanStr(obj.headline, 60);
+      const subhead = cleanStr(obj.subhead, 90);
+      let cta = cleanStr(obj.cta, 24);
+
+      if (isBannedHeadline(headline)) continue; // regenerate
+      if (isBannedCta(cta)) cta = strategeCtaFallback(h + attempt);
+      return {
+        headline,
+        subhead: subhead || strategeSubheadFallback(h),
+        cta,
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  // Never passed — use curated, always-on-brand copy.
+  return {
+    headline: strategeHeadlineFallback(h),
+    subhead: strategeSubheadFallback(h),
+    cta: strategeCtaFallback(h),
+  };
+}
+
 export async function writeAdCopy(args: {
   product: string;
   description?: string;
   brand: Record<string, unknown>;
 }): Promise<AdCopy & { suggestedColor?: ColorCombo }> {
   const { product, description, brand } = args;
+
+  // Stratège marketing itself → locked voice + validation.
+  if (isStrategeBrand(brand)) return writeStrategeCopy({ product, brand });
   const ctx = [
     brand.brand_name && `Brand: ${brand.brand_name}`,
     brand.product && `Product line: ${brand.product}`,

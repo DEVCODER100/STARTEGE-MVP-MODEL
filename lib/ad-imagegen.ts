@@ -3,12 +3,14 @@ import { loadImageBuffer, storeImage } from "./storage";
 import {
   buildAdPromptFromBrief,
   buildPromptFromMerged,
+  buildStrategeAdPrompt,
   pickLever,
   resolveCombo,
 } from "./ad-prompt-builder";
 import { parseDescription } from "./ad-brief-parser";
 import { mergeWithDefaults } from "./ad-brief-merger";
 import { writeAdCopy } from "./ad-copy";
+import { isStrategeBrand } from "./brand-locks";
 import type { AdBrief, AdCopy, AdLever, AdMode, ColorCombo } from "./ad-brief";
 
 // Ad Studio generation pipeline (native-text ads).
@@ -40,10 +42,14 @@ export async function generateAd(
   const colors = resolveCombo(brief.color, brand);
   const isExact =
     brief.productSource === "upload" && brief.mode === "exact" && !!brief.photoUrl;
+  // Stratège self-marketing → brand-locked prompt (palettes, hero, negatives).
+  const stratege = isStrategeBrand(brand);
 
   let result;
   if (isExact) {
-    const prompt = buildAdPromptFromBrief({ ...brief, lever }, colors, lever, true);
+    const prompt = stratege
+      ? buildStrategeAdPrompt({ copy: brief.copy, seed, forRemix: true })
+      : buildAdPromptFromBrief({ ...brief, lever }, colors, lever, true);
     const buf = await loadImageBuffer(brief.photoUrl!);
     result = await remixImage({
       prompt,
@@ -52,7 +58,9 @@ export async function generateAd(
       aspectRatio: "ASPECT_1_1",
     });
   } else {
-    const prompt = buildAdPromptFromBrief({ ...brief, lever }, colors, lever, false);
+    const prompt = stratege
+      ? buildStrategeAdPrompt({ copy: brief.copy, seed, forRemix: false })
+      : buildAdPromptFromBrief({ ...brief, lever }, colors, lever, false);
     result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
   }
 
@@ -97,13 +105,20 @@ export async function generateFromDescription(
   };
 
   const isExact = !!opts.photoUrl && opts.mode === "exact";
-  const prompt = buildPromptFromMerged({
-    product,
-    description: opts.productDescription ?? "",
-    copy,
-    merged,
-    forRemix: isExact,
-  });
+  const prompt = isStrategeBrand(brand)
+    ? buildStrategeAdPrompt({
+        copy,
+        seed,
+        forRemix: isExact,
+        logoPresent: !!merged.logo,
+      })
+    : buildPromptFromMerged({
+        product,
+        description: opts.productDescription ?? "",
+        copy,
+        merged,
+        forRemix: isExact,
+      });
 
   let result;
   if (isExact) {

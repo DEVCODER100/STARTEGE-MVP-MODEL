@@ -1,5 +1,12 @@
 import { resolveBrandColor } from "./creative-direction";
 import { PALETTES, type AdBrief, type AdCopy, type AdLever, type ColorCombo } from "./ad-brief";
+import {
+  pickStrategePalette,
+  pickHeroTreatment,
+  STRATEGE_NEGATIVE_PROMPT,
+  COMPOSITION_RULES,
+  BANNED_COLORS,
+} from "./brand-locks";
 
 // Builds the 6-part ad prompt that reliably produces clean, ready-to-post
 // product ads with Ideogram 4.0 (native text rendering). Uniqueness comes from
@@ -142,6 +149,51 @@ export interface MergedBrief {
 
 function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// ─── Stratège self-marketing lock ───────────────────────────────────────────
+// Builds a fully brand-locked prompt for Stratège's OWN ads. Enforces the
+// visual locks: only the 3 approved palettes (Lock 1), one concrete hero scene
+// instead of abstract graphics (Locks 2 + 6), negative-prompt against
+// dashboards/charts/AI clichés, and strict composition/hierarchy (Lock 5).
+// Color rotation is confined to the brand palettes — it can never drift into
+// purple/indigo/neon. Voice locks (3 + 4) live in lib/ad-copy.ts.
+export function buildStrategeAdPrompt(opts: {
+  copy: AdCopy;
+  seed: string;
+  forRemix?: boolean;
+  logoPresent?: boolean;
+}): string {
+  const { copy, seed, forRemix = false, logoPresent = true } = opts;
+  const h = hash(seed);
+  const pal = pickStrategePalette(h);
+  const hero = forRemix
+    ? "Keep the provided product/photo exactly as it is as the hero, placed with generous negative space"
+    : pickHeroTreatment(h >> 5);
+
+  const cta = copy.cta?.trim();
+  const ctaLine = cta
+    ? `A solid ${pal.accent}-filled pill CTA button with high-contrast text reading "${cta}". `
+    : "";
+  const logoLine = logoPresent
+    ? "Place the small Stratège logo (two ascending chevrons) at the bottom-left, about 8% of the width. "
+    : "";
+
+  return `A warm, editorial social-media advertisement poster for Stratège — a content thinking partner for founders. Founder-personal and magazine-grade. This is NOT a generic SaaS ad.
+
+Hero: ${hero}.
+
+Color palette — use ONLY these three colors: ${pal.bg} background, ${pal.accent} accent, ${pal.text} text. Warm, editorial, high-contrast. Absolutely no ${BANNED_COLORS.join(", ")}.
+
+Large bold serif headline as the focal point reading "${copy.headline}".
+Smaller subheadline reading "${copy.subhead}".
+${ctaLine}${logoLine}
+
+DO NOT include: ${STRATEGE_NEGATIVE_PROMPT}.
+
+${COMPOSITION_RULES}
+
+Editorial, warm, founder-personal, generous negative space, crisp typography, social-media ready, ready to post.`;
 }
 
 // Same 6-part formula, powered by the merged dual-input brief.
