@@ -76,6 +76,16 @@ export async function POST(req: Request) {
       fallback: result.fallback,
     });
 
+    // Save to the Library (best-effort — never fail the request on this).
+    try {
+      await sql`
+        INSERT INTO generated_images (user_id, url, headline, source)
+        VALUES (${user.id}, ${result.url}, ${result.copy?.headline ?? null}, 'studio')
+      `;
+    } catch {
+      /* ignore */
+    }
+
     const usage = await getUsage(user.id);
     return NextResponse.json({
       url: result.url,

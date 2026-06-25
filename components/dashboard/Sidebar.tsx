@@ -16,6 +16,7 @@ interface ChatSummary {
 const NAV = [
   ["/dashboard", "The desk"],
   ["/task", "Image studio"],
+  ["/library", "Library"],
   ["/brand", "Brand book"],
   ["/upgrade", "Plans"],
 ] as const;
