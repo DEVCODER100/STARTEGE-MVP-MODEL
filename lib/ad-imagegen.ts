@@ -1,6 +1,14 @@
 import { generateImages, remixImage } from "./ideogram";
 import { loadImageBuffer, storeImage } from "./storage";
-import { buildAdPromptFromBrief, pickLever, resolveCombo } from "./ad-prompt-builder";
+import {
+  buildAdPromptFromBrief,
+  buildPromptFromMerged,
+  pickLever,
+  resolveCombo,
+} from "./ad-prompt-builder";
+import { parseDescription } from "./ad-brief-parser";
+import { mergeWithDefaults } from "./ad-brief-merger";
+import { writeAdCopy } from "./ad-copy";
 import type { AdBrief, AdCopy, AdLever, AdMode, ColorCombo } from "./ad-brief";
 
 // Ad Studio generation pipeline (native-text ads).
@@ -58,6 +66,67 @@ export async function generateAd(
     mode: brief.mode ?? "text",
     color: brief.color,
     lever,
+    fallback: result.fallback,
+  };
+}
+
+// ─── Dual-input "Describe" flow ─────────────────────────────────────────────
+// The Image Studio textarea is the source of truth: parse it → fill nulls with
+// smart defaults from the brand → auto-write copy → build the prompt → render.
+export interface DescribeOptions {
+  description: string; // final textarea content (palettes/styles/chips + free text)
+  photoUrl?: string; // optional uploaded product photo
+  mode?: AdMode; // exact | lookalike (only meaningful with a photo)
+  productDescription?: string; // optional vision description for lookalike
+}
+
+export async function generateFromDescription(
+  brand: Record<string, unknown>,
+  opts: DescribeOptions,
+  seed: string
+): Promise<GeneratedAd> {
+  const parsed = await parseDescription(opts.description);
+  const merged = mergeWithDefaults(parsed, brand, seed);
+
+  const product = String(brand.product ?? "the product").slice(0, 120);
+  const written = await writeAdCopy({ product, description: opts.description, brand });
+  const copy: AdCopy = {
+    headline: merged.headline_text || written.headline,
+    subhead: written.subhead,
+    cta: written.cta,
+  };
+
+  const isExact = !!opts.photoUrl && opts.mode === "exact";
+  const prompt = buildPromptFromMerged({
+    product,
+    description: opts.productDescription ?? "",
+    copy,
+    merged,
+    forRemix: isExact,
+  });
+
+  let result;
+  if (isExact) {
+    const buf = await loadImageBuffer(opts.photoUrl!);
+    result = await remixImage({
+      prompt,
+      imageBuffer: buf,
+      imageWeight: REMIX_IMAGE_WEIGHT,
+      aspectRatio: "ASPECT_1_1",
+    });
+  } else {
+    result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
+  }
+
+  const buf = await loadImageBuffer(result.urls[0]);
+  const url = await storeImage(buf, "jpg");
+
+  return {
+    url,
+    copy,
+    mode: opts.mode ?? "text",
+    color: "brand",
+    lever: pickLever(seed),
     fallback: result.fallback,
   };
 }

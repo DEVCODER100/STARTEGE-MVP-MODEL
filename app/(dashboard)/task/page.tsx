@@ -1,134 +1,247 @@
 "use client";
 
-import { useState } from "react";
-import ChatInterface from "@/components/chat/ChatInterface";
-import ResizableSplit from "@/components/app/ResizableSplit";
+import { useMemo, useState } from "react";
 import { Label } from "@/components/ui/primitives";
+import {
+  PALETTES,
+  COLOR_COMBO_IDS,
+  STYLES,
+  STYLE_IDS,
+} from "@/lib/ad-brief";
+import { nearestFestival } from "@/lib/festivals";
 
-const directions = [
-  {
-    id: "product",
-    name: "Product hero",
-    composition: "Single product, precise lighting, generous negative space",
-    mood: "Premium and conversion-led",
-    colors: ["#F0E6D2", "#171713", "#087A55"],
-    prompt: "Create a premium product launch visual with a single hero product and clean negative space",
-  },
-  {
-    id: "editorial",
-    name: "Editorial story",
-    composition: "Human moment, asymmetrical crop, story-first frame",
-    mood: "Warm, candid, founder-led",
-    colors: ["#E8793B", "#7A5C3E", "#F5F1E8"],
-    prompt: "Create an editorial founder-story visual with a candid human moment and asymmetrical composition",
-  },
-  {
-    id: "system",
-    name: "Modern system",
-    composition: "Interface fragments, modular geometry, product in context",
-    mood: "Sharp, useful, modern SaaS",
-    colors: ["#064B39", "#E7F1EC", "#FBFAF6"],
-    prompt: "Create a modern SaaS feature visual using modular interface fragments and a clean product-focused composition",
-  },
-];
+const PLACEHOLDER =
+  "Example: A premium ad for my skincare product in sage green and cream. Product on the left, soft daylight, minimal text. Place my logo bottom-right.";
+
+interface ResultState {
+  url: string;
+  copy?: { headline: string; subhead: string; cta: string };
+}
 
 export default function ImageStudioPage() {
-  const [selected, setSelected] = useState("product");
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ResultState | null>(null);
 
-  const choose = (id: string, prompt: string) => {
-    setSelected(id);
-    window.dispatchEvent(new CustomEvent("stratege:prefill", { detail: prompt }));
+  // Quick-add chips (computed once).
+  const chips = useMemo(() => {
+    const today = new Date().toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const fest = nearestFestival(14);
+    return [
+      { id: "colors", label: "+ My brand colors", text: "Use my brand colors from my profile." },
+      { id: "logo", label: "+ My logo", text: "Place my logo at bottom-right of the image." },
+      { id: "date", label: "+ Today's date", text: `Reference today's date: ${today}.` },
+      {
+        id: "festival",
+        label: "+ Festival theme",
+        text: fest
+          ? `Reference upcoming festival: ${fest.name}.`
+          : "Reference the upcoming festival season.",
+      },
+    ];
+  }, []);
+
+  const has = (s: string) => text.includes(s);
+  const toggle = (s: string) =>
+    setText((t) =>
+      t.includes(s)
+        ? t.replace(s, "").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim()
+        : (t.trim() ? t.trim() + " " : "") + s
+    );
+
+  const generate = async () => {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/image/studio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: text }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        setError(data.error || "Could not generate the image.");
+        return;
+      }
+      setResult({ url: data.url, copy: data.copy });
+    } catch {
+      setError("Could not reach the image service.");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const directionsCanvas = (
-    <div className="mx-auto max-w-5xl">
-      <Label>Creative directions</Label>
-      <div className="mt-3 grid gap-4 xl:grid-cols-3">
-        {directions.map((direction) => {
-          const active = selected === direction.id;
-          return (
-            <button
-              key={direction.id}
-              onClick={() => choose(direction.id, direction.prompt)}
-              className={`overflow-hidden rounded-artifact border bg-white text-left transition-all ${
-                active ? "border-strategy shadow-artifact ring-1 ring-strategy" : "border-rule hover:border-ink/30"
-              }`}
-            >
-              <div className="grid aspect-[5/3] grid-cols-3 border-b border-rule">
-                {direction.colors.map((color, index) => (
-                  <span key={color} style={{ background: color }} className={index === 1 ? "scale-y-75 self-center" : ""} />
-                ))}
-              </div>
-              <div className="p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="font-display text-xl text-ink">{direction.name}</h2>
-                  {active && <span className="text-xs font-medium text-strategy-deep">✓ Selected</span>}
-                </div>
-                <Label>Composition</Label>
-                <p className="mt-1 text-sm leading-relaxed text-ink">{direction.composition}</p>
-                <p className="mt-3 border-t border-rule pt-3 text-xs text-strategy-deep">{direction.mood}</p>
-              </div>
-            </button>
-          );
-        })}
+  return (
+    <div className="min-h-0 flex-1 overflow-auto bg-paper">
+      {/* Top bar */}
+      <div className="flex h-[60px] items-center justify-between border-b border-rule px-6">
+        <span className="font-mono text-xs uppercase tracking-[0.18em] text-ink">Image studio</span>
+        <button
+          onClick={() => {
+            setText("");
+            setResult(null);
+            setError(null);
+          }}
+          className="rounded-[9px] border border-strategy px-4 py-1.5 text-sm font-medium text-strategy-deep hover:bg-strategy-tint/40"
+        >
+          New
+        </button>
       </div>
 
-      <div className="mt-6 rounded-artifact border border-rule bg-white p-5 shadow-artifact">
-        <Label>How this works</Label>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          {[
-            ["01", "Choose direction", "Set the composition and visual mood."],
-            ["02", "Give the product", "Describe it or attach a real product photo."],
-            ["03", "Approve the brief", "Stratège asks only for the missing creative decisions."],
-          ].map(([number, title, body]) => (
-            <div key={number} className="rounded-card border border-rule bg-canvas p-4">
-              <span className="font-mono text-xs text-accent">{number}</span>
-              <strong className="mt-2 block text-sm text-ink">{title}</strong>
-              <p className="mt-1 text-xs leading-relaxed text-muted">{body}</p>
+      <div className="grid lg:grid-cols-[40%_1px_1fr]">
+        {/* LEFT — Recommended */}
+        <div className="px-6 py-7 sm:px-8">
+          <h1 className="font-display text-2xl leading-tight text-ink">Pick a starting point</h1>
+          <p className="mt-1 text-sm text-muted">Stratège picks the rest</p>
+
+          <div className="mt-7"><Label>Colors</Label></div>
+          <div className="mt-3 grid grid-cols-3 gap-x-5 gap-y-4 sm:grid-cols-3">
+            {COLOR_COMBO_IDS.map((id) => {
+              const p = PALETTES[id];
+              const active = has(p.description_text);
+              const stripes = id === "brand" ? [p.colorA, p.colorB, "#171713"] : [p.colorA, p.colorB];
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => toggle(p.description_text)}
+                  className="group text-center"
+                >
+                  <span
+                    className={`flex h-[72px] w-full overflow-hidden rounded-xl border transition-all ${
+                      active ? "border-strategy ring-1 ring-strategy" : "border-rule group-hover:border-ink/30"
+                    }`}
+                  >
+                    {stripes.map((c, i) => (
+                      <span key={i} style={{ background: c }} className="flex-1" />
+                    ))}
+                  </span>
+                  <span className="mt-1.5 block text-[11px] leading-tight text-ink">{p.name}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-8"><Label>Style</Label></div>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {STYLE_IDS.map((id) => {
+              const s = STYLES[id];
+              const active = has(s.description_text);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => toggle(s.description_text)}
+                  className={`overflow-hidden rounded-xl border bg-white text-left transition-all ${
+                    active ? "border-strategy ring-1 ring-strategy" : "border-rule hover:border-ink/30"
+                  }`}
+                >
+                  <span className="block h-[6px] w-full" style={{ background: "linear-gradient(90deg,#1D9E75,#171713)" }} />
+                  <span className="block px-4 py-3">
+                    <span className="block font-display text-[15px] font-bold text-ink">{s.name}</span>
+                    <span className="mt-0.5 block text-xs leading-snug text-muted">{s.description}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* DIVIDER */}
+        <div className="relative hidden bg-rule lg:block">
+          <span className="absolute left-1/2 top-1/2 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-rule bg-paper text-[9px] font-semibold tracking-wide text-muted">
+            OR
+          </span>
+        </div>
+
+        {/* RIGHT — Describe */}
+        <div className="flex flex-col px-6 py-7 sm:px-8">
+          <h1 className="font-display text-2xl leading-tight text-ink">Describe what you want</h1>
+          <p className="mt-1 text-sm text-muted">
+            Pick cards on the left or type here — this text is what Stratège uses.
+          </p>
+
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={PLACEHOLDER}
+            className="mt-5 min-h-[220px] flex-1 resize-none rounded-2xl border border-rule bg-white p-5 text-[15px] leading-relaxed text-ink outline-none transition-all placeholder:italic placeholder:text-[#A9A498] focus:border-strategy focus:shadow-focus"
+          />
+
+          <div className="mt-2 flex items-center justify-between">
+            <span className="font-mono text-[11px] uppercase tracking-wider text-muted">Quick add</span>
+            {!!text && (
+              <button onClick={() => setText("")} className="text-xs text-muted underline underline-offset-2 hover:text-ink">
+                Clear all
+              </button>
+            )}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {chips.map((c) => {
+              const active = has(c.text);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => toggle(c.text)}
+                  className={`rounded-full border px-3.5 py-2 text-[13px] transition-colors ${
+                    active
+                      ? "border-strategy bg-strategy-tint text-strategy-deep"
+                      : "border-rule bg-white text-ink hover:border-strategy hover:text-strategy-deep"
+                  }`}
+                >
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+
+          <button
+            onClick={generate}
+            disabled={!text.trim() || busy}
+            className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-strategy text-base font-semibold text-white hover:bg-strategy-deep disabled:opacity-40"
+          >
+            {busy ? (
+              "Generating…"
+            ) : (
+              <>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                Generate image
+              </>
+            )}
+          </button>
+          <p className="mt-3 text-center text-xs text-muted">Uses 1 credit · 1 image</p>
+
+          {result && (
+            <div className="mt-6 rounded-2xl border border-rule bg-white p-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={result.url} alt="Generated ad" className="w-full rounded-xl" />
+              {result.copy && (
+                <div className="mt-3 space-y-1 text-sm">
+                  <p className="font-display text-base text-ink">{result.copy.headline}</p>
+                  <p className="text-muted">{result.copy.subhead}</p>
+                </div>
+              )}
+              <a
+                href={result.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-block text-sm text-strategy-deep hover:text-strategy"
+              >
+                Open / download
+              </a>
             </div>
-          ))}
+          )}
         </div>
       </div>
-    </div>
-  );
-
-  const conversation = (
-    <>
-      <div className="border-b border-rule px-4 py-3">
-        <Label>Creative conversation</Label>
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col" data-tour="conversation">
-        <ChatInterface
-          mode="create"
-          greeting="What are we making?"
-          subline="Describe the product or attach a photo. I’ll turn your direction into a structured creative brief."
-          chips={["Create a product launch ad", "Make an Instagram visual", "Use my product photo"]}
-          desk
-        />
-      </div>
-    </>
-  );
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col bg-canvas">
-      <header className="border-b border-rule bg-paper/85 px-5 py-4">
-        <Label>Image studio</Label>
-        <h1 className="mt-1 font-display text-3xl text-ink">Direct the visual before generating it.</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted">
-          Choose a genuinely different starting point, then describe the product or upload its photo in the conversation.
-        </p>
-      </header>
-
-      <ResizableSplit
-        side={conversation}
-        main={directionsCanvas}
-        sidePosition="right"
-        mainLabel="Creative directions"
-        mainStatus="Studio"
-        mobileTitle="Image studio"
-        sideTab="Talk"
-        mainTab="Directions"
-      />
     </div>
   );
 }
