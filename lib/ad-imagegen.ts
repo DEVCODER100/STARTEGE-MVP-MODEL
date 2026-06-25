@@ -11,6 +11,7 @@ import { parseDescription } from "./ad-brief-parser";
 import { mergeWithDefaults } from "./ad-brief-merger";
 import { writeAdCopy } from "./ad-copy";
 import { isStrategeBrand } from "./brand-locks";
+import { logPromptConsole, logPromptFile } from "./prompt-log";
 import type { AdBrief, AdCopy, AdLever, AdMode, ColorCombo } from "./ad-brief";
 
 // Ad Studio generation pipeline (native-text ads).
@@ -21,6 +22,14 @@ import type { AdBrief, AdCopy, AdLever, AdMode, ColorCombo } from "./ad-brief";
 
 const REMIX_IMAGE_WEIGHT = 68; // 60-75: keep product recognisable, allow new bg+text
 
+// Debug payload so we can see the exact prompt + decisions behind any image.
+export interface AdDebug {
+  prompt: string;
+  parsedFields?: unknown;
+  mergedFields?: unknown;
+  levers: Record<string, unknown>;
+}
+
 export interface GeneratedAd {
   url: string;
   copy: AdCopy;
@@ -28,6 +37,7 @@ export interface GeneratedAd {
   color: ColorCombo;
   lever: AdLever;
   fallback: boolean;
+  debug: AdDebug;
 }
 
 export async function generateAd(
@@ -45,11 +55,14 @@ export async function generateAd(
   // Stratège self-marketing → brand-locked prompt (palettes, hero, negatives).
   const stratege = isStrategeBrand(brand);
 
+  const prompt = stratege
+    ? buildStrategeAdPrompt({ copy: brief.copy, seed, forRemix: isExact })
+    : buildAdPromptFromBrief({ ...brief, lever }, colors, lever, isExact);
+
+  logPromptConsole(prompt);
+
   let result;
   if (isExact) {
-    const prompt = stratege
-      ? buildStrategeAdPrompt({ copy: brief.copy, seed, forRemix: true })
-      : buildAdPromptFromBrief({ ...brief, lever }, colors, lever, true);
     const buf = await loadImageBuffer(brief.photoUrl!);
     result = await remixImage({
       prompt,
@@ -58,15 +71,13 @@ export async function generateAd(
       aspectRatio: "ASPECT_1_1",
     });
   } else {
-    const prompt = stratege
-      ? buildStrategeAdPrompt({ copy: brief.copy, seed, forRemix: false })
-      : buildAdPromptFromBrief({ ...brief, lever }, colors, lever, false);
     result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
   }
 
   // Re-host on our own storage so the URL is stable + editable later.
   const buf = await loadImageBuffer(result.urls[0]);
   const url = await storeImage(buf, "jpg");
+  await logPromptFile(prompt, url);
 
   return {
     url,
@@ -75,6 +86,18 @@ export async function generateAd(
     color: brief.color,
     lever,
     fallback: result.fallback,
+    debug: {
+      prompt,
+      levers: {
+        stratege,
+        color: brief.color,
+        colors: stratege ? "brand-locked" : colors,
+        side: lever.side,
+        render: lever.render,
+        font: lever.font,
+        background: lever.bg,
+      },
+    },
   };
 }
 
@@ -105,7 +128,8 @@ export async function generateFromDescription(
   };
 
   const isExact = !!opts.photoUrl && opts.mode === "exact";
-  const prompt = isStrategeBrand(brand)
+  const stratege = isStrategeBrand(brand);
+  const prompt = stratege
     ? buildStrategeAdPrompt({
         copy,
         seed,
@@ -119,6 +143,8 @@ export async function generateFromDescription(
         merged,
         forRemix: isExact,
       });
+
+  logPromptConsole(prompt);
 
   let result;
   if (isExact) {
@@ -135,6 +161,7 @@ export async function generateFromDescription(
 
   const buf = await loadImageBuffer(result.urls[0]);
   const url = await storeImage(buf, "jpg");
+  await logPromptFile(prompt, url);
 
   return {
     url,
@@ -143,6 +170,21 @@ export async function generateFromDescription(
     color: "brand",
     lever: pickLever(seed),
     fallback: result.fallback,
+    debug: {
+      prompt,
+      parsedFields: parsed,
+      mergedFields: stratege ? { ...merged, colors: "brand-locked" } : merged,
+      levers: {
+        stratege,
+        colors: stratege ? "brand-locked" : merged.colors,
+        side: merged.side,
+        render: merged.render,
+        font: merged.font,
+        background: merged.bg,
+        lighting: merged.lighting,
+        mood: merged.mood,
+      },
+    },
   };
 }
 

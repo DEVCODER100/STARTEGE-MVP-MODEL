@@ -303,6 +303,7 @@ export async function POST(req: Request) {
           fallback: result.fallback,
           usage,
           chatId,
+          debug: result.debug,
         });
       }
     }
@@ -469,6 +470,7 @@ export async function POST(req: Request) {
         fallback: result.fallback,
         usage,
         chatId,
+        debug: result.debug,
       });
     }
 

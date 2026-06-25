@@ -92,6 +92,7 @@ export async function POST(req: Request) {
       copy: result.copy,
       fallback: result.fallback,
       usage,
+      debug: result.debug,
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";

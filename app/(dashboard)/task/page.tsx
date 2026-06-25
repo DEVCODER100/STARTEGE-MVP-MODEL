@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Label } from "@/components/ui/primitives";
 import {
   PALETTES,
@@ -13,9 +13,17 @@ import { nearestFestival } from "@/lib/festivals";
 const PLACEHOLDER =
   "Example: A premium ad for my skincare product in sage green and cream. Product on the left, soft daylight, minimal text. Place my logo bottom-right.";
 
+interface AdDebug {
+  prompt: string;
+  parsedFields?: unknown;
+  mergedFields?: unknown;
+  levers?: Record<string, unknown>;
+}
+
 interface ResultState {
   url: string;
   copy?: { headline: string; subhead: string; cta: string };
+  debug?: AdDebug;
 }
 
 export default function ImageStudioPage() {
@@ -23,6 +31,15 @@ export default function ImageStudioPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ResultState | null>(null);
+
+  // Debug panel: dev mode, or ?debug=true on the URL (so it never shows for
+  // normal users in production).
+  const [showDebug, setShowDebug] = useState(process.env.NODE_ENV === "development");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("debug") === "true") {
+      setShowDebug(true);
+    }
+  }, []);
 
   // Quick-add chips (computed once).
   const chips = useMemo(() => {
@@ -69,7 +86,7 @@ export default function ImageStudioPage() {
         setError(data.error || "Could not generate the image.");
         return;
       }
-      setResult({ url: data.url, copy: data.copy });
+      setResult({ url: data.url, copy: data.copy, debug: data.debug });
     } catch {
       setError("Could not reach the image service.");
     } finally {
@@ -238,10 +255,48 @@ export default function ImageStudioPage() {
               >
                 Open / download
               </a>
+
+              {showDebug && result.debug && (
+                <details className="mt-4 border-t border-rule pt-3">
+                  <summary className="cursor-pointer select-none font-mono text-[11px] uppercase tracking-wider text-muted hover:text-ink">
+                    Debug: show prompt
+                  </summary>
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-muted">
+                        Ideogram prompt ({result.debug.prompt.length} chars)
+                      </div>
+                      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-ink/95 p-3 text-[11px] leading-relaxed text-paper">
+{result.debug.prompt}
+                      </pre>
+                    </div>
+                    {result.debug.levers && (
+                      <DebugBlock title="Levers" value={result.debug.levers} />
+                    )}
+                    {result.debug.parsedFields != null && (
+                      <DebugBlock title="Parsed fields" value={result.debug.parsedFields} />
+                    )}
+                    {result.debug.mergedFields != null && (
+                      <DebugBlock title="Merged fields" value={result.debug.mergedFields} />
+                    )}
+                  </div>
+                </details>
+              )}
             </div>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function DebugBlock({ title, value }: { title: string; value: unknown }) {
+  return (
+    <div>
+      <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-muted">{title}</div>
+      <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-rule bg-canvas p-3 text-[11px] leading-relaxed text-ink">
+{JSON.stringify(value, null, 2)}
+      </pre>
     </div>
   );
 }

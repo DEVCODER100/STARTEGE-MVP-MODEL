@@ -43,3 +43,6 @@ public/generated/
 
 # Local design reference images (not for deploy)
 template/
+
+# Local image-prompt debug logs
+/logs/
