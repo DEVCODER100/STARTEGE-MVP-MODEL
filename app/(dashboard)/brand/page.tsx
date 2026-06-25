@@ -20,6 +20,7 @@ export default async function BrandPage() {
     brand_colors: row.brand_colors,
     website: row.website,
     industry: row.industry,
+    logo_url: row.logo_url,
   };
   return <BrandBook initial={profile} />;
 }

@@ -25,6 +25,7 @@ const FieldSchema = z.object({
   country: z.string().max(80).optional(),
   role: z.string().max(80).optional(),
   industry: z.string().max(80).optional(),
+  logo_url: z.string().max(2000).optional(),
   onboarding_complete: z.boolean().optional(),
 });
 
