@@ -3,10 +3,11 @@ import { PALETTES, type AdBrief, type AdCopy, type AdLever, type ColorCombo } fr
 import {
   pickStrategePalette,
   pickHeroTreatment,
-  STRATEGE_NEGATIVE_PROMPT,
-  COMPOSITION_RULES,
-  BANNED_COLORS,
-} from "./brand-locks";
+  NEGATIVE_VISUAL_ELEMENTS,
+  BANNED_COLOR_TERMS,
+  SAFE_ZONE_RULE,
+  compositionBlock,
+} from "./prompt-constants";
 
 // Builds the 6-part ad prompt that reliably produces clean, ready-to-post
 // product ads with Ideogram 4.0 (native text rendering). Uniqueness comes from
@@ -111,7 +112,7 @@ ${subject}
 ${lever.bg} background in ${colorA} and ${colorB}.
 Large bold ${lever.font} headline at ${headlinePos} reading "${copy.headline}".
 Smaller subheadline reading "${copy.subhead}".
-${ctaLine}Minimal, high-contrast, magazine-grade, crisp typography, social-media ready, ready to post.`;
+${ctaLine}${SAFE_ZONE_RULE} Minimal, high-contrast, magazine-grade, crisp typography, social-media ready, ready to post.`;
 }
 
 // Convenience: build straight from a complete brief + resolved colors.
@@ -176,7 +177,7 @@ Keep the entire ${mockupSide} half of the composition as clean, empty negative s
 ${bg} background in ${colorA} and ${colorB}.
 Large bold ${font} headline on the ${textSide} reading "${copy.headline}".
 Smaller subheadline beneath it reading "${copy.subhead}".
-${ctaLine}Minimal, high-contrast, magazine-grade, crisp typography, generous negative space, social-media ready, ready to post.`;
+${ctaLine}${SAFE_ZONE_RULE} Minimal, high-contrast, magazine-grade, crisp typography, generous negative space, social-media ready, ready to post.`;
 }
 
 // ─── Stratège self-marketing lock ───────────────────────────────────────────
@@ -211,17 +212,53 @@ export function buildStrategeAdPrompt(opts: {
 
 Hero: ${hero}.
 
-Color palette — use ONLY these three colors: ${pal.bg} background, ${pal.accent} accent, ${pal.text} text. Warm, editorial, high-contrast. Absolutely no ${BANNED_COLORS.join(", ")}.
+Color palette — use ONLY these three colors: ${pal.bg} background, ${pal.accent} accent, ${pal.text} text. Warm, editorial, high-contrast. ${BANNED_COLOR_TERMS}
 
 Large bold serif headline as the focal point reading "${copy.headline}".
 Smaller subheadline reading "${copy.subhead}".
 ${ctaLine}${logoLine}
 
-DO NOT include: ${STRATEGE_NEGATIVE_PROMPT}.
+${NEGATIVE_VISUAL_ELEMENTS}
 
-${COMPOSITION_RULES}
+${compositionBlock()}
 
 Editorial, warm, founder-personal, generous negative space, crisp typography, social-media ready, ready to post.`;
+}
+
+// ─── Stratège self-marketing + screenshot (the fifth template) ───────────────
+// Combines the brand-locked palette (cream/green/noir) with the screenshot
+// composition (one half left empty for the Sharp-overlaid framed screenshot).
+// Used when isStrategeBrand AND a screenshot is attached, so brand locks are
+// never dropped on the screenshot path.
+export function buildStrategeScreenshotAdPrompt(opts: {
+  copy: AdCopy;
+  seed: string;
+  mockupSide: "left" | "right";
+}): string {
+  const { copy, seed, mockupSide } = opts;
+  const pal = pickStrategePalette(hash(seed));
+  const textSide = mockupSide === "left" ? "right" : "left";
+
+  const cta = copy.cta?.trim();
+  const ctaLine = cta
+    ? `A solid ${pal.accent}-filled rounded pill CTA button reading "${cta}". `
+    : "";
+
+  return `A warm, editorial social-media advertisement poster for Stratège — a content thinking partner for founders. Founder-personal and magazine-grade. This is NOT a generic SaaS ad.
+
+Keep the entire ${mockupSide} half of the composition as clean, empty negative space — a product screenshot will be placed there separately. Do NOT draw any device, laptop, phone, browser window, app screen, dashboard, chart, or any user interface anywhere in the image.
+
+Color palette — use ONLY these three colors: ${pal.bg} background, ${pal.accent} accent, ${pal.text} text. Warm, editorial, high-contrast. ${BANNED_COLOR_TERMS}
+
+Large bold serif headline on the ${textSide} reading "${copy.headline}".
+Smaller subheadline beneath it reading "${copy.subhead}".
+${ctaLine}
+
+${NEGATIVE_VISUAL_ELEMENTS}
+
+${compositionBlock()}
+
+Editorial, warm, founder-personal, generous negative space, crisp typography, ready to post.`;
 }
 
 // Same 6-part formula, powered by the merged dual-input brief.
@@ -252,5 +289,5 @@ ${subject}
 ${merged.bg} background in ${colorA} and ${colorB}.
 Large bold ${merged.font} headline at ${pos} reading "${copy.headline}".
 Smaller subheadline reading "${copy.subhead}".
-${ctaLine}${logoLine}${notesLine}${moodLine}Minimal, high-contrast, magazine-grade, crisp typography, social-media ready, ready to post.`;
+${ctaLine}${logoLine}${notesLine}${moodLine}${SAFE_ZONE_RULE} Minimal, high-contrast, magazine-grade, crisp typography, social-media ready, ready to post.`;
 }

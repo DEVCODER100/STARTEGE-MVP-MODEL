@@ -6,6 +6,7 @@ import {
   buildPromptFromMerged,
   buildStrategeAdPrompt,
   buildScreenshotAdPrompt,
+  buildStrategeScreenshotAdPrompt,
   pickLever,
   resolveCombo,
 } from "./ad-prompt-builder";
@@ -231,14 +232,18 @@ export async function generateScreenshotAd(
   const copy = await writeAdCopy({ product, description: visionDesc, brand, screenshot: true });
 
   // 5) Background + text only (no UI), mockup side reserved.
-  const prompt = buildScreenshotAdPrompt({
-    copy,
-    colors: merged.colors,
-    font: merged.font,
-    bg: merged.bg,
-    mockupSide,
-    visionDesc,
-  });
+  //    Stratège marketing itself → brand-locked screenshot template (keeps the
+  //    cream/green/noir palette); everyone else → the generic screenshot template.
+  const prompt = isStrategeBrand(brand)
+    ? buildStrategeScreenshotAdPrompt({ copy, seed, mockupSide })
+    : buildScreenshotAdPrompt({
+        copy,
+        colors: merged.colors,
+        font: merged.font,
+        bg: merged.bg,
+        mockupSide,
+        visionDesc,
+      });
   logPromptConsole(prompt);
   const result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
 
