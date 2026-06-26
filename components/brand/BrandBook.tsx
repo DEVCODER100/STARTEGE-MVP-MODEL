@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { Label } from "@/components/ui/primitives";
+import AssetsManager from "@/components/brand/AssetsManager";
 
 export interface BrandProfile {
   brand_name?: string | null;
@@ -184,6 +185,8 @@ export default function BrandBook({ initial }: { initial: BrandProfile }) {
           </div>
           {logoError && <p className="mt-2 text-sm text-red-600">{logoError}</p>}
         </section>
+
+        <AssetsManager />
 
         <div className="mt-2">
           {editable.map(([key, label, hint]) => {

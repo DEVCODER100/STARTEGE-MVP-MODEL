@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Label } from "@/components/ui/primitives";
 import {
   PALETTES,
@@ -9,6 +10,29 @@ import {
   STYLE_IDS,
 } from "@/lib/ad-brief";
 import { nearestFestival } from "@/lib/festivals";
+import type { FrameType } from "@/lib/device-frames";
+import type { BrandAsset } from "@/lib/brand-assets-types";
+
+type Frame = FrameType;
+
+function frameOf(f: string | null | undefined): Frame {
+  return f === "laptop" || f === "phone" || f === "browser" ? f : "floating";
+}
+function assetTypeFromFrame(f: Frame): string {
+  return f === "laptop"
+    ? "web_app_dashboard"
+    : f === "phone"
+    ? "mobile_app"
+    : f === "browser"
+    ? "landing_page"
+    : "product_photo";
+}
+const FRAME_OPTS: { id: Frame; label: string }[] = [
+  { id: "laptop", label: "Web app / dashboard" },
+  { id: "phone", label: "Mobile app" },
+  { id: "browser", label: "Landing page" },
+  { id: "floating", label: "Just the screenshot" },
+];
 
 const PLACEHOLDER =
   "Example: A premium ad for my skincare product in sage green and cream. Product on the left, soft daylight, minimal text. Place my logo bottom-right.";
@@ -32,10 +56,24 @@ export default function ImageStudioPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ResultState | null>(null);
 
-  // Screenshot ad (SaaS / app / website).
-  const [shotUrl, setShotUrl] = useState<string | null>(null);
-  const [frameType, setFrameType] = useState<"laptop" | "phone" | "browser" | "floating">("laptop");
-  const [shotBusy, setShotBusy] = useState(false);
+  // Screenshot ad (SaaS / app / website) + Brand Book asset picker.
+  const [assets, setAssets] = useState<BrandAsset[]>([]);
+  const [selectedAssetId, setSelectedAssetId] = useState<string>("");
+  const [frameOverride, setFrameOverride] = useState<Frame | "">("");
+  const [showUpload, setShowUpload] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null);
+  const [uploadFrame, setUploadFrame] = useState<Frame>("laptop");
+  const [saveToBrand, setSaveToBrand] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/brand-assets/list")
+      .then((r) => r.json())
+      .then((d) => Array.isArray(d.assets) && setAssets(d.assets))
+      .catch(() => undefined);
+  }, []);
+
+  const selectedAsset = assets.find((a) => a.id === selectedAssetId) || null;
 
   // Debug panel: dev mode, or ?debug=true on the URL (so it never shows for
   // normal users in production).
@@ -76,18 +114,67 @@ export default function ImageStudioPage() {
         : (t.trim() ? t.trim() + " " : "") + s
     );
 
+  const shotInputRef = useRef<HTMLInputElement | null>(null);
+  const onPickShot = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Screenshot too large (max 10 MB).");
+      return;
+    }
+    setError(null);
+    setPendingFile(file);
+    setPendingPreview(URL.createObjectURL(file));
+    setShowUpload(true);
+    setSelectedAssetId(""); // a fresh upload takes precedence over a saved pick
+    if (shotInputRef.current) shotInputRef.current.value = "";
+  };
+
+  // Resolve the chosen screenshot (uploaded-new or saved asset) → URL + frame.
+  const resolveScreenshot = async (): Promise<{ screenshotUrl: string; frameType: Frame } | null> => {
+    if (showUpload && pendingFile) {
+      const form = new FormData();
+      form.append("file", pendingFile);
+      if (saveToBrand) {
+        form.append("asset_type", assetTypeFromFrame(uploadFrame));
+        form.append("device_frame_default", uploadFrame);
+        const res = await fetch("/api/brand-assets/upload", { method: "POST", body: form });
+        const d = await res.json();
+        if (!res.ok || !d.asset) throw new Error(d.error || "Could not save the asset.");
+        setAssets((a) => [d.asset, ...a]);
+        return { screenshotUrl: d.asset.asset_url, frameType: frameOf(d.asset.device_frame_default) };
+      }
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const d = await res.json();
+      if (!res.ok || !d.url) throw new Error(d.error || "Screenshot upload failed.");
+      return { screenshotUrl: d.url, frameType: uploadFrame };
+    }
+    if (selectedAsset) {
+      fetch(`/api/brand-assets/${selectedAsset.id}/use`, { method: "POST" }).catch(() => {});
+      return {
+        screenshotUrl: selectedAsset.asset_url,
+        frameType: frameOf(frameOverride || selectedAsset.device_frame_default),
+      };
+    }
+    return null;
+  };
+
   const generate = async () => {
     if (!text.trim() || busy) return;
     setBusy(true);
     setError(null);
     try {
+      let shot: { screenshotUrl: string; frameType: Frame } | null = null;
+      try {
+        shot = await resolveScreenshot();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not prepare the screenshot.");
+        return;
+      }
       const res = await fetch("/api/image/studio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description: text,
-          ...(shotUrl ? { screenshotUrl: shotUrl, frameType } : {}),
-        }),
+        body: JSON.stringify({ description: text, ...(shot ?? {}) }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) {
@@ -102,40 +189,11 @@ export default function ImageStudioPage() {
     }
   };
 
-  const shotInputRef = useRef<HTMLInputElement | null>(null);
-  const onPickShot = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 8 * 1024 * 1024) {
-      setError("Screenshot too large (max 8 MB).");
-      return;
-    }
-    setShotBusy(true);
-    setError(null);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok || !data.url) {
-        setError(data.error || "Screenshot upload failed.");
-        return;
-      }
-      setShotUrl(data.url);
-    } catch {
-      setError("Could not upload the screenshot.");
-    } finally {
-      setShotBusy(false);
-      if (shotInputRef.current) shotInputRef.current.value = "";
-    }
+  const clearUpload = () => {
+    setShowUpload(false);
+    setPendingFile(null);
+    setPendingPreview(null);
   };
-
-  const FRAMES: { id: typeof frameType; label: string }[] = [
-    { id: "laptop", label: "Web app / dashboard" },
-    { id: "phone", label: "Mobile app" },
-    { id: "browser", label: "Landing page" },
-    { id: "floating", label: "Just the screenshot" },
-  ];
 
   return (
     <div className="min-h-0 flex-1 overflow-auto bg-paper">
@@ -262,51 +320,109 @@ export default function ImageStudioPage() {
             })}
           </div>
 
-          {/* Screenshot ad (SaaS / app / website) */}
+          {/* Screenshot ad (SaaS / app / website) — Brand Book asset picker */}
           <div className="mt-5 rounded-xl border border-rule bg-white p-3.5">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-ink">Show your product</span>
               <span className="font-mono text-[10px] uppercase tracking-wider text-muted">SaaS / app</span>
             </div>
-            <p className="mt-0.5 text-xs text-muted">
-              Upload a screenshot of your app or website — it&apos;s placed in a device frame in the ad.
-            </p>
-            <input ref={shotInputRef} type="file" accept="image/*" onChange={onPickShot} className="hidden" />
 
-            {!shotUrl ? (
-              <button
-                onClick={() => shotInputRef.current?.click()}
-                disabled={shotBusy}
-                className="mt-3 w-full rounded-lg border border-dashed border-rule py-2.5 text-sm text-strategy-deep hover:border-strategy disabled:opacity-50"
-              >
-                {shotBusy ? "Uploading…" : "Upload a screenshot of your app or website"}
-              </button>
-            ) : (
-              <div className="mt-3">
-                <div className="flex items-center gap-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={shotUrl} alt="Screenshot" className="h-14 w-20 rounded border border-rule object-cover" />
-                  <button onClick={() => setShotUrl(null)} className="text-xs text-muted underline hover:text-ink">
-                    Remove
-                  </button>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {FRAMES.map((f) => (
-                    <button
-                      key={f.id}
-                      onClick={() => setFrameType(f.id)}
-                      className={`rounded-lg border px-2.5 py-2 text-left text-xs ${
-                        frameType === f.id
-                          ? "border-strategy bg-strategy-tint text-strategy-deep"
-                          : "border-rule text-ink hover:border-strategy"
-                      }`}
-                    >
-                      {f.label}
-                    </button>
+            <input ref={shotInputRef} type="file" accept="image/png,image/jpeg" onChange={onPickShot} className="hidden" />
+
+            {assets.length > 0 && !showUpload && (
+              <>
+                <p className="mt-1 text-xs text-muted">Pick from your Brand Book — saved once, reusable forever.</p>
+                <select
+                  value={selectedAssetId}
+                  onChange={(e) => setSelectedAssetId(e.target.value)}
+                  className="mt-2 w-full rounded-lg border border-rule bg-white px-3 py-2 text-sm text-ink outline-none focus:border-strategy"
+                >
+                  <option value="">Don&apos;t show a product</option>
+                  {assets.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.asset_name}
+                    </option>
                   ))}
-                </div>
-              </div>
+                </select>
+
+                {selectedAsset && (
+                  <div className="mt-3 flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={selectedAsset.thumbnail_url || selectedAsset.asset_url} alt={selectedAsset.asset_name} className="h-12 w-16 rounded border border-rule object-cover" />
+                    <div className="flex-1">
+                      <span className="block text-[11px] text-muted">Used {selectedAsset.use_count} time{selectedAsset.use_count === 1 ? "" : "s"}</span>
+                      <select
+                        value={frameOverride}
+                        onChange={(e) => setFrameOverride(e.target.value as Frame)}
+                        className="mt-1 w-full rounded-lg border border-rule bg-white px-2 py-1 text-xs text-ink outline-none focus:border-strategy"
+                      >
+                        <option value="">Frame: default ({selectedAsset.device_frame_default || "floating"})</option>
+                        {FRAME_OPTS.map((f) => (
+                          <option key={f.id} value={f.id}>{f.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => { setShowUpload(true); shotInputRef.current?.click(); }}
+                  className="mt-3 text-xs text-strategy-deep underline hover:text-strategy"
+                >
+                  Or upload a new screenshot just for this ad
+                </button>
+                <Link href="/brand" className="ml-3 text-xs text-muted underline hover:text-ink">Manage assets</Link>
+              </>
             )}
+
+            {(assets.length === 0 || showUpload) && (
+              <>
+                {!pendingPreview ? (
+                  <>
+                    <p className="mt-1 text-xs text-muted">
+                      Upload your first asset to use it across all future ads → it&apos;ll be saved to your Brand Book.
+                    </p>
+                    <button
+                      onClick={() => { setShowUpload(true); shotInputRef.current?.click(); }}
+                      className="mt-3 w-full rounded-lg border border-dashed border-rule py-2.5 text-sm text-strategy-deep hover:border-strategy"
+                    >
+                      Upload a screenshot of your app or website
+                    </button>
+                  </>
+                ) : (
+                  <div className="mt-3">
+                    <div className="flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={pendingPreview} alt="Screenshot" className="h-14 w-20 rounded border border-rule object-cover" />
+                      <button onClick={clearUpload} className="text-xs text-muted underline hover:text-ink">Remove</button>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {FRAME_OPTS.map((f) => (
+                        <button
+                          key={f.id}
+                          onClick={() => setUploadFrame(f.id)}
+                          className={`rounded-lg border px-2.5 py-2 text-left text-xs ${
+                            uploadFrame === f.id ? "border-strategy bg-strategy-tint text-strategy-deep" : "border-rule text-ink hover:border-strategy"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                    <label className="mt-3 flex items-center gap-2 text-xs text-ink">
+                      <input type="checkbox" checked={saveToBrand} onChange={(e) => setSaveToBrand(e.target.checked)} />
+                      💾 Save to Brand Book for reuse
+                    </label>
+                    {assets.length > 0 && (
+                      <button onClick={clearUpload} className="mt-2 text-xs text-muted underline hover:text-ink">
+                        ← Use a saved asset instead
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
             <p className="mt-2 text-[11px] leading-snug text-muted">
               Tip: use Win+Shift+S (Windows) or Cmd+Shift+4 (Mac) to capture just the part you want — without
               email addresses, notifications, or sensitive info.

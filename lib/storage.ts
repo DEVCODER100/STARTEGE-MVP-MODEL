@@ -37,6 +37,27 @@ export async function storeImage(
 }
 
 /**
+ * Best-effort delete of an image we stored (Vercel Blob or local /generated).
+ * Never throws — cleanup failures shouldn't block the user-facing action.
+ */
+export async function deleteImage(url: string): Promise<void> {
+  if (!url) return;
+  try {
+    if (url.includes(".blob.vercel-storage.com")) {
+      const { del } = await import("@vercel/blob");
+      await del(url);
+      return;
+    }
+    if (url.startsWith("/generated/")) {
+      const { unlink } = await import("node:fs/promises");
+      await unlink(join(process.cwd(), "public", url.replace(/^\/+/, "")));
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
  * SSRF guard: only allow image URLs that WE produced — local /generated paths
  * or Vercel Blob URLs. Anything else (arbitrary http hosts) is rejected before
  * we ever fetch it server-side.
