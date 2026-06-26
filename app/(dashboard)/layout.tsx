@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getOrCreateUser } from "@/lib/users";
 import { getDb } from "@/lib/db";
 import Sidebar from "@/components/dashboard/Sidebar";
+import MobileNav from "@/components/dashboard/MobileNav";
 
 export default async function DashboardLayout({
   children,
@@ -23,7 +24,10 @@ export default async function DashboardLayout({
   return (
     <div className="flex h-screen overflow-hidden bg-canvas">
       <Sidebar />
-      <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <MobileNav />
+        <main className="flex min-h-0 flex-1 flex-col">{children}</main>
+      </div>
     </div>
   );
 }
