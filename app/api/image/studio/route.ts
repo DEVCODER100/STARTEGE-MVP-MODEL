@@ -8,9 +8,10 @@ import {
   getUsage,
   MVP_LIMIT_MESSAGE,
 } from "@/lib/usage";
-import { generateFromDescription } from "@/lib/ad-imagegen";
+import { generateFromDescription, generateScreenshotAd } from "@/lib/ad-imagegen";
 import { isAllowedImageUrl } from "@/lib/storage";
 import { isAdMode } from "@/lib/ad-brief";
+import { isFrameType } from "@/lib/device-frames";
 import { limits } from "@/lib/security";
 import { logEvent } from "@/lib/events";
 
@@ -25,6 +26,8 @@ const Body = z.object({
   description: z.string().min(1).max(2000),
   photoUrl: z.string().max(2000).optional(),
   mode: z.string().optional(),
+  screenshotUrl: z.string().max(2000).optional(),
+  frameType: z.string().max(20).optional(),
 });
 
 export async function POST(req: Request) {
@@ -65,11 +68,16 @@ export async function POST(req: Request) {
     `;
     const brand = brandRows[0] ?? {};
 
-    const result = await generateFromDescription(
-      brand,
-      { description, photoUrl, mode },
-      `${user.id}:${Date.now()}`
-    );
+    const screenshotUrl =
+      parsed.data.screenshotUrl && isAllowedImageUrl(parsed.data.screenshotUrl)
+        ? parsed.data.screenshotUrl
+        : undefined;
+    const frameType = isFrameType(parsed.data.frameType) ? parsed.data.frameType : "floating";
+
+    const seed = `${user.id}:${Date.now()}`;
+    const result = screenshotUrl
+      ? await generateScreenshotAd(brand, { description, screenshotUrl, frameType }, seed)
+      : await generateFromDescription(brand, { description, photoUrl, mode }, seed);
     await consumeImage(user.id);
     await logEvent(user.id, "image_generated", {
       kind: "studio",

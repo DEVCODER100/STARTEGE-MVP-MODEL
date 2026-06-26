@@ -5,7 +5,7 @@
 // Flow: product (photo upload OR typed name) → [mode if photo] → color combo
 //       → AI auto-writes the copy → Ideogram → return.
 
-export type ProductSource = "upload" | "text";
+export type ProductSource = "upload" | "text" | "screenshot";
 export type AdMode = "exact" | "lookalike";
 
 export type ColorCombo =
@@ -162,6 +162,7 @@ export interface AdBrief {
   photoUrl?: string; // stored blob/public URL — never base64
   productDescription?: string; // vision output, cached for edits
   mode?: AdMode; // only relevant when productSource === "upload"
+  frame?: string; // device frame, only when productSource === "screenshot"
   color?: ColorCombo;
   copy?: AdCopy;
   lever?: AdLever;

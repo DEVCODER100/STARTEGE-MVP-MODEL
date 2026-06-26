@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Label } from "@/components/ui/primitives";
 import {
   PALETTES,
@@ -31,6 +31,11 @@ export default function ImageStudioPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ResultState | null>(null);
+
+  // Screenshot ad (SaaS / app / website).
+  const [shotUrl, setShotUrl] = useState<string | null>(null);
+  const [frameType, setFrameType] = useState<"laptop" | "phone" | "browser" | "floating">("laptop");
+  const [shotBusy, setShotBusy] = useState(false);
 
   // Debug panel: dev mode, or ?debug=true on the URL (so it never shows for
   // normal users in production).
@@ -79,7 +84,10 @@ export default function ImageStudioPage() {
       const res = await fetch("/api/image/studio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: text }),
+        body: JSON.stringify({
+          description: text,
+          ...(shotUrl ? { screenshotUrl: shotUrl, frameType } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) {
@@ -93,6 +101,41 @@ export default function ImageStudioPage() {
       setBusy(false);
     }
   };
+
+  const shotInputRef = useRef<HTMLInputElement | null>(null);
+  const onPickShot = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      setError("Screenshot too large (max 8 MB).");
+      return;
+    }
+    setShotBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        setError(data.error || "Screenshot upload failed.");
+        return;
+      }
+      setShotUrl(data.url);
+    } catch {
+      setError("Could not upload the screenshot.");
+    } finally {
+      setShotBusy(false);
+      if (shotInputRef.current) shotInputRef.current.value = "";
+    }
+  };
+
+  const FRAMES: { id: typeof frameType; label: string }[] = [
+    { id: "laptop", label: "Web app / dashboard" },
+    { id: "phone", label: "Mobile app" },
+    { id: "browser", label: "Landing page" },
+    { id: "floating", label: "Just the screenshot" },
+  ];
 
   return (
     <div className="min-h-0 flex-1 overflow-auto bg-paper">
@@ -217,6 +260,57 @@ export default function ImageStudioPage() {
                 </button>
               );
             })}
+          </div>
+
+          {/* Screenshot ad (SaaS / app / website) */}
+          <div className="mt-5 rounded-xl border border-rule bg-white p-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-ink">Show your product</span>
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted">SaaS / app</span>
+            </div>
+            <p className="mt-0.5 text-xs text-muted">
+              Upload a screenshot of your app or website — it&apos;s placed in a device frame in the ad.
+            </p>
+            <input ref={shotInputRef} type="file" accept="image/*" onChange={onPickShot} className="hidden" />
+
+            {!shotUrl ? (
+              <button
+                onClick={() => shotInputRef.current?.click()}
+                disabled={shotBusy}
+                className="mt-3 w-full rounded-lg border border-dashed border-rule py-2.5 text-sm text-strategy-deep hover:border-strategy disabled:opacity-50"
+              >
+                {shotBusy ? "Uploading…" : "Upload a screenshot of your app or website"}
+              </button>
+            ) : (
+              <div className="mt-3">
+                <div className="flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={shotUrl} alt="Screenshot" className="h-14 w-20 rounded border border-rule object-cover" />
+                  <button onClick={() => setShotUrl(null)} className="text-xs text-muted underline hover:text-ink">
+                    Remove
+                  </button>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {FRAMES.map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setFrameType(f.id)}
+                      className={`rounded-lg border px-2.5 py-2 text-left text-xs ${
+                        frameType === f.id
+                          ? "border-strategy bg-strategy-tint text-strategy-deep"
+                          : "border-rule text-ink hover:border-strategy"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="mt-2 text-[11px] leading-snug text-muted">
+              Tip: use Win+Shift+S (Windows) or Cmd+Shift+4 (Mac) to capture just the part you want — without
+              email addresses, notifications, or sensitive info.
+            </p>
           </div>
 
           {error && <p className="mt-4 text-sm text-red-600">{error}</p>}

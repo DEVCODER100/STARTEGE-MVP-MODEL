@@ -151,6 +151,34 @@ function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// ─── Screenshot ad (SaaS) ───────────────────────────────────────────────────
+// The real product screenshot is composited on top with Sharp AFTER generation,
+// so Ideogram only makes the background + headline/subhead/CTA and must LEAVE
+// the mockup side empty (and draw no fake UI of its own).
+export function buildScreenshotAdPrompt(opts: {
+  copy: AdCopy;
+  colors: [string, string];
+  font: string;
+  bg: string;
+  mockupSide: "left" | "right"; // where the screenshot will be placed
+  visionDesc?: string;
+}): string {
+  const { copy, colors, font, bg, mockupSide, visionDesc } = opts;
+  const [colorA, colorB] = colors;
+  const textSide = mockupSide === "left" ? "right" : "left";
+
+  const cta = copy.cta?.trim();
+  const ctaLine = cta ? `A small rounded pill button reading "${cta}". ` : "";
+  const category = visionDesc ? `It is a software product: ${visionDesc} ` : "";
+
+  return `A bold, modern social-media advertisement poster for a software product. ${category}
+Keep the entire ${mockupSide} half of the composition as clean, empty negative space — a product screenshot will be placed there separately. Do NOT draw any device, laptop, phone, browser window, app screen, dashboard, chart, or any user interface anywhere in the image.
+${bg} background in ${colorA} and ${colorB}.
+Large bold ${font} headline on the ${textSide} reading "${copy.headline}".
+Smaller subheadline beneath it reading "${copy.subhead}".
+${ctaLine}Minimal, high-contrast, magazine-grade, crisp typography, generous negative space, social-media ready, ready to post.`;
+}
+
 // ─── Stratège self-marketing lock ───────────────────────────────────────────
 // Builds a fully brand-locked prompt for Stratège's OWN ads. Enforces the
 // visual locks: only the 3 approved palettes (Lock 1), one concrete hero scene

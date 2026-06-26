@@ -38,6 +38,38 @@ Rules:
 - IGNORE any background, surface, text, logo, or watermark.
 - Do not invent a brand name. Output the description text only.`;
 
+const SCREENSHOT_DESC_SYSTEM = `This is a screenshot of a SaaS / software product.
+Describe in 30 words MAX, one short paragraph, no preamble:
+- the product category (analytics, productivity, design tool, dashboard, etc),
+- what the main UI element shows,
+- the visual style (minimal, dense, colorful, dark, etc).
+Output the description text only.`;
+
+// Vision summary of an uploaded app/website screenshot — feeds the headline
+// generator so copy matches the actual product shown.
+export async function describeScreenshot(screenshotDataUri: string): Promise<string> {
+  try {
+    const r = await chat({
+      model: "sonnet",
+      system: SCREENSHOT_DESC_SYSTEM,
+      temperature: 0.2,
+      maxTokens: 120,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Describe this product screenshot." },
+            { type: "image_url", image_url: { url: screenshotDataUri } },
+          ],
+        },
+      ],
+    });
+    return r.text.trim().replace(/^["']|["']$/g, "").slice(0, 240);
+  } catch {
+    return "";
+  }
+}
+
 export async function describeProduct(
   photoDataUri: string
 ): Promise<string> {
@@ -148,15 +180,92 @@ async function writeStrategeCopy(args: {
   };
 }
 
-export async function writeAdCopy(args: {
+// ─── SaaS / screenshot copy (Problem 2) ─────────────────────────────────────
+const SCREENSHOT_COPY_SYSTEM = `You write the on-image text for an ad for a SaaS / software product (NOT a physical product).
+
+Return STRICT JSON only:
+{"headline": "...", "subhead": "...", "cta": "..."}
+
+Headlines must:
+- Speak to user OUTCOMES, not features.
+- NEVER use generic AI-tool language: no "AI-powered", "intelligent", "cutting-edge", "revolutionary", "next-gen", "smart", "supercharge".
+- Use specific, founder-relevant language: "Ship faster", "Stop [pain point]", "Built for [specific user]".
+- Match the product's apparent category (productivity, design, analytics, etc) — infer it from the product description provided.
+
+Lengths: headline 2-6 words; subhead 4-9 words; cta 1-3 words (e.g. "Try it free", "Start building", "See it live"). No emojis, no hashtags, no quotes inside values.`;
+
+const BANNED_SAAS_WORDS = [
+  "ai-powered", "ai powered", "intelligent", "cutting-edge", "cutting edge",
+  "revolutionary", "next-gen", "next gen", "supercharge", "smart",
+];
+
+function hasBannedSaasWord(s: string): boolean {
+  const t = (s || "").toLowerCase();
+  return BANNED_SAAS_WORDS.some((w) => t.includes(w));
+}
+
+async function writeScreenshotCopy(args: {
   product: string;
   description?: string;
   brand: Record<string, unknown>;
 }): Promise<AdCopy & { suggestedColor?: ColorCombo }> {
   const { product, description, brand } = args;
+  const ctx = [
+    brand.brand_name && `Brand: ${brand.brand_name}`,
+    brand.target_audience && `Audience: ${brand.target_audience}`,
+    brand.usp && `USP: ${brand.usp}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await chat({
+        model: "haiku",
+        system: SCREENSHOT_COPY_SYSTEM,
+        temperature: 0.8 + attempt * 0.1,
+        maxTokens: 200,
+        messages: [
+          {
+            role: "user",
+            content: `Product: ${product}
+${description ? `What the screenshot shows: ${description}\n` : ""}${ctx ? ctx + "\n" : ""}${
+              attempt ? "Your previous attempt used banned AI-tool language — avoid it.\n" : ""
+            }
+Return the JSON.`,
+          },
+        ],
+      });
+      const s = r.text.indexOf("{");
+      const e = r.text.lastIndexOf("}");
+      if (s === -1 || e === -1) continue;
+      const obj = JSON.parse(r.text.slice(s, e + 1));
+      const headline = cleanStr(obj.headline, 60);
+      const subhead = cleanStr(obj.subhead, 90);
+      const cta = cleanStr(obj.cta, 24) || "Try it free";
+      if (!headline) continue;
+      if (hasBannedSaasWord(headline) || hasBannedSaasWord(subhead)) continue; // regen
+      return { headline, subhead, cta };
+    } catch {
+      continue;
+    }
+  }
+  return { headline: "Built for builders", subhead: `Meet ${product}`.slice(0, 90), cta: "Try it free" };
+}
+
+export async function writeAdCopy(args: {
+  product: string;
+  description?: string;
+  brand: Record<string, unknown>;
+  screenshot?: boolean;
+}): Promise<AdCopy & { suggestedColor?: ColorCombo }> {
+  const { product, description, brand, screenshot } = args;
 
   // Stratège marketing itself → locked voice + validation.
   if (isStrategeBrand(brand)) return writeStrategeCopy({ product, brand });
+
+  // SaaS screenshot ad → outcome-driven voice, no AI-tool clichés.
+  if (screenshot) return writeScreenshotCopy({ product, description, brand });
   const ctx = [
     brand.brand_name && `Brand: ${brand.brand_name}`,
     brand.product && `Product line: ${brand.product}`,
