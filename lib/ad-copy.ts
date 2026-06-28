@@ -126,14 +126,36 @@ Lengths & form:
 - subhead: 4 to 10 words, a concrete moment, not a claim.
 - No emojis, no hashtags, no quotes inside values.`;
 
+// Short, on-brand fallbacks for split-half layouts (2-3 words, ≤10 chars/word).
+const SHORT_STRATEGE_HEADLINES = [
+  "Ship it.",
+  "Post today.",
+  "Built today.",
+  "Made today.",
+  "Open the desk.",
+  "Your stories.",
+  "The desk's open.",
+];
+
+function isSplitHeadline(h: string): boolean {
+  const words = (h || "").replace(/[.!?,;:]/g, "").trim().split(/\s+/).filter(Boolean);
+  return words.length >= 1 && words.length <= 3 && words.every((w) => w.length <= 10);
+}
+
 // Generates Stratège copy and validates it against the banned patterns,
-// regenerating up to 3 times. Curated on-brand fallbacks if it never passes.
+// regenerating up to 3 times. `split` adds the 2-3 word split-half cap (used
+// when a screenshot fills the other half). Curated fallbacks if it never passes.
 async function writeStrategeCopy(args: {
   product: string;
   brand: Record<string, unknown>;
+  split?: boolean;
 }): Promise<AdCopy & { suggestedColor?: ColorCombo }> {
   const seed = String(args.brand.brand_name ?? args.product ?? "stratege");
   const h = smallHash(seed);
+  const split = !!args.split;
+  const splitNote = split
+    ? ` This ad uses a SPLIT-HALF layout (a screenshot fills the other half), so the headline MUST be ${HEADLINE_SPLIT} — keep the founder voice but very short (e.g. "Ship it.", "Open the desk.", "Built today.").`
+    : "";
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -145,9 +167,9 @@ async function writeStrategeCopy(args: {
         messages: [
           {
             role: "user",
-            content: `Write a fresh Stratège ad: headline, subhead, CTA.${
+            content: `Write a fresh Stratège ad: headline, subhead, CTA.${splitNote}${
               attempt
-                ? " Your previous attempt sounded too generic/corporate — pick a more specific founder moment, question, or feeling."
+                ? " Your previous attempt sounded too generic/corporate or was too long — pick a more specific, shorter founder moment."
                 : ""
             }\n\nReturn the JSON.`,
           },
@@ -162,6 +184,7 @@ async function writeStrategeCopy(args: {
       let cta = cleanStr(obj.cta, 24);
 
       if (isBannedHeadline(headline)) continue; // regenerate
+      if (split && !isSplitHeadline(headline)) continue; // too long for the split half
       if (isBannedCta(cta)) cta = strategeCtaFallback(h + attempt);
       return {
         headline,
@@ -175,7 +198,7 @@ async function writeStrategeCopy(args: {
 
   // Never passed — use curated, always-on-brand copy.
   return {
-    headline: strategeHeadlineFallback(h),
+    headline: split ? SHORT_STRATEGE_HEADLINES[h % SHORT_STRATEGE_HEADLINES.length] : strategeHeadlineFallback(h),
     subhead: strategeSubheadFallback(h),
     cta: strategeCtaFallback(h),
   };
@@ -266,8 +289,9 @@ export async function writeAdCopy(args: {
 }): Promise<AdCopy & { suggestedColor?: ColorCombo }> {
   const { product, description, brand, screenshot } = args;
 
-  // Stratège marketing itself → locked voice + validation.
-  if (isStrategeBrand(brand)) return writeStrategeCopy({ product, brand });
+  // Stratège marketing itself → locked voice + validation. On a screenshot
+  // (split-half) layout, also enforce the 2-3 word cap.
+  if (isStrategeBrand(brand)) return writeStrategeCopy({ product, brand, split: !!screenshot });
 
   // SaaS screenshot ad → outcome-driven voice, no AI-tool clichés.
   if (screenshot) return writeScreenshotCopy({ product, description, brand });
