@@ -225,6 +225,30 @@ ${compositionBlock()}
 Editorial, warm, founder-personal, generous negative space, crisp typography, social-media ready, ready to post.`;
 }
 
+// ─── Split-layout background (text drawn by Sharp, not Ideogram) ─────────────
+// Ideogram renders ONLY a clean, text-free background. The headline/subhead/CTA
+// are composited afterward by lib/text-overlay.ts, so placement is guaranteed
+// (no reliance on Ideogram obeying a safe-zone instruction).
+export function buildSplitBackgroundPrompt(opts: {
+  bg: string;
+  accent: string;
+  mockupSide: "left" | "right";
+  brandLocked: boolean;
+}): string {
+  const { bg, accent, mockupSide, brandLocked } = opts;
+  const textSide = mockupSide === "left" ? "right" : "left";
+  const brandLine = brandLocked
+    ? `Warm, editorial, founder-personal — Stratège brand. Absolutely ${BANNED_COLORS}.`
+    : "";
+
+  return `A clean, modern brand background for a social-media advertisement — NO text of any kind.
+A single, even, flat ${bg} color field — no panels, cards, blocks, rounded rectangles, columns, stripes, or decorative shapes; at most a very subtle ${accent} grain. Calm, generous negative space, editorial and flat.
+Keep the entire ${mockupSide} half completely empty and clean (a product screenshot will be placed there later). Keep the ${textSide} half a calm, even color field with room for text to be added later.
+Render NO text, NO letters, NO words, NO numbers, NO headline, NO captions, NO labels, NO logos, NO UI, and ${NO_FAKE_UI}.
+${brandLine}
+Flat, clean, high quality, used purely as a backdrop. Absolutely no text anywhere in the image.`;
+}
+
 // ─── Stratège self-marketing + screenshot (the fifth template) ───────────────
 // Combines the brand-locked palette (cream/green/noir) with the screenshot
 // composition (one half left empty for the Sharp-overlaid framed screenshot).

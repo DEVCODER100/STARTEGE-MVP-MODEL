@@ -5,8 +5,7 @@ import {
   buildAdPromptFromBrief,
   buildPromptFromMerged,
   buildStrategeAdPrompt,
-  buildScreenshotAdPrompt,
-  buildStrategeScreenshotAdPrompt,
+  buildSplitBackgroundPrompt,
   pickLever,
   resolveCombo,
 } from "./ad-prompt-builder";
@@ -14,7 +13,9 @@ import { parseDescription } from "./ad-brief-parser";
 import { mergeWithDefaults } from "./ad-brief-merger";
 import { writeAdCopy, describeScreenshot } from "./ad-copy";
 import { isStrategeBrand } from "./brand-locks";
+import { pickStrategePalette } from "./prompt-constants";
 import { compositeScreenshotInFrame, type FrameType } from "./device-frames";
+import { drawSplitAdText } from "./text-overlay";
 import { logPromptConsole, logPromptFile } from "./prompt-log";
 import type { AdBrief, AdCopy, AdLever, AdMode, ColorCombo } from "./ad-brief";
 
@@ -227,46 +228,64 @@ export async function generateScreenshotAd(
   const merged = mergeWithDefaults(parsed, brand, seed);
   const mockupSide: "left" | "right" = merged.side === "left" ? "left" : "right";
 
-  // 4) SaaS-voice copy.
+  // 4) Copy (Stratège voice / SaaS voice, with the 2-3 word split cap).
   const product = String(brand.product ?? "your product").slice(0, 120);
   const copy = await writeAdCopy({ product, description: visionDesc, brand, screenshot: true });
 
-  // 5) Background + text only (no UI), mockup side reserved.
-  //    Stratège marketing itself → brand-locked screenshot template (keeps the
-  //    cream/green/noir palette); everyone else → the generic screenshot template.
-  const prompt = isStrategeBrand(brand)
-    ? buildStrategeScreenshotAdPrompt({ copy, seed, mockupSide })
-    : buildScreenshotAdPrompt({
-        copy,
-        colors: merged.colors,
-        font: merged.font,
-        bg: merged.bg,
-        mockupSide,
-        visionDesc,
-      });
+  // 5) DETERMINISTIC SPLIT LAYOUT. Ideogram makes ONLY a text-free background;
+  //    the framed screenshot and the text are composited by us afterward, so
+  //    placement is guaranteed (no reliance on Ideogram obeying instructions).
+  const stratege = isStrategeBrand(brand);
+  const textSide: "left" | "right" = mockupSide === "left" ? "right" : "left";
+  const palette = stratege
+    ? pickStrategePalette(seedHash(seed))
+    : { bg: merged.colors[0], accent: merged.colors[1], text: "" };
+
+  const prompt = buildSplitBackgroundPrompt({
+    bg: palette.bg,
+    accent: palette.accent,
+    mockupSide,
+    brandLocked: stratege,
+  });
   logPromptConsole(prompt);
   const result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
 
-  // 6) Overlay the framed screenshot onto the reserved side.
+  // 6a) Composite the framed screenshot onto the reserved (mockup) side.
   const bg = await sharp(await loadImageBuffer(result.urls[0]))
     .resize(AD_SIZE, AD_SIZE, { fit: "cover" })
     .toBuffer();
 
+  // The mockup must stay within its own half (never cross the centre line),
+  // so the text half stays clean for the Sharp-rendered copy.
   const isPortrait = framed.height > framed.width;
   const pad = Math.round(AD_SIZE * 0.05);
-  const boxW = isPortrait ? AD_SIZE * 0.42 : AD_SIZE * 0.52;
-  const boxH = isPortrait ? AD_SIZE * 0.74 : AD_SIZE * 0.66;
+  const half = AD_SIZE / 2;
+  const boxW = (isPortrait ? 0.36 : 0.42) * AD_SIZE;
+  const boxH = (isPortrait ? 0.74 : 0.6) * AD_SIZE;
   const scale = Math.min(boxW / framed.width, boxH / framed.height);
   const drawW = Math.round(framed.width * scale);
   const drawH = Math.round(framed.height * scale);
   const resizedFramed = await sharp(framed.buffer).resize(drawW, drawH).toBuffer();
-  const left = mockupSide === "left" ? pad : AD_SIZE - drawW - pad;
+  // Centre the mockup within its half.
+  const left =
+    mockupSide === "left"
+      ? Math.round((half - drawW) / 2)
+      : Math.round(half + (half - drawW) / 2);
   const top = Math.round((AD_SIZE - drawH) / 2);
-
-  const finalBuf = await sharp(bg)
+  const composited = await sharp(bg)
     .composite([{ input: resizedFramed, left, top }])
-    .jpeg({ quality: 92 })
+    .jpeg({ quality: 95 })
     .toBuffer();
+
+  // 6b) Draw headline + subhead + CTA on the text side, inside a 5% safe zone,
+  //     in the brand serif — guaranteed placement.
+  const finalBuf = await drawSplitAdText(composited, {
+    textSide,
+    headline: copy.headline,
+    subhead: copy.subhead,
+    cta: copy.cta,
+    palette: { bg: palette.bg, accent: palette.accent, text: palette.text },
+  });
   const url = await storeImage(finalBuf, "jpg");
   await logPromptFile(prompt, url);
 
@@ -279,11 +298,21 @@ export async function generateScreenshotAd(
     fallback: result.fallback,
     debug: {
       prompt,
-      parsedFields: { visionDesc, frameType: opts.frameType, mockupSide },
+      parsedFields: { visionDesc, frameType: opts.frameType, mockupSide, textSide },
       mergedFields: merged,
-      levers: { colors: merged.colors, side: merged.side, font: merged.font, background: merged.bg, frameType: opts.frameType },
+      levers: { palette, mockupSide, textSide, frameType: opts.frameType },
     },
   };
+}
+
+// FNV-1a hash for palette rotation (mirrors ad-prompt-builder).
+function seedHash(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
 }
 
 // Stored per generated message so an edit can regenerate without re-asking.
