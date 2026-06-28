@@ -141,6 +141,7 @@ export interface AdCopy {
   headline: string;
   subhead: string;
   cta: string;
+  bullets?: string[]; // optional 3 short feature points for rich poster ads
 }
 
 export interface AdLever {

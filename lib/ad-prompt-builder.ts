@@ -243,6 +243,44 @@ ${compositionBlock()}
 Editorial, warm, founder-personal, generous negative space, crisp typography, social-media ready, ready to post.`;
 }
 
+// ─── Rich full-canvas poster (Ideogram renders everything natively) ──────────
+// The "old workflow" for user/product brands: Ideogram draws the whole poster —
+// big headline, subhead, an optional 3-item check-list, the product photo, a
+// brand wordmark, and a CTA pill — like a Razer-style ad.
+export function buildRichAdPrompt(opts: {
+  product: string;
+  description: string;
+  copy: AdCopy;
+  colors: [string, string];
+  lever: AdLever;
+  brandName?: string;
+  forRemix: boolean;
+}): string {
+  const { product, description, copy, colors, lever, brandName, forRemix } = opts;
+  const [colorA, colorB] = colors;
+
+  const subject = forRemix
+    ? `Keep the provided product object exactly as it is, shown large and photorealistic in the lower portion of the poster.`
+    : `${description || product} shown large and photorealistic in the lower portion of the poster, ${lever.render}.`;
+
+  const bullets = (copy.bullets ?? []).filter(Boolean).slice(0, 3);
+  const checklist = bullets.length
+    ? `A vertical checklist of ${bullets.length} short items, each preceded by a small filled circular check badge in ${colorB}, reading:\n${bullets
+        .map((b) => `"✓ ${b}"`)
+        .join("\n")}\n`
+    : "";
+
+  const cta = copy.cta?.trim();
+  const ctaLine = cta ? `A solid rounded pill CTA button near the bottom reading "${cta}".\n` : "";
+  const logoLine = brandName ? `A small "${brandName}" brand wordmark logo in a bottom corner.\n` : "";
+
+  return `A bold, premium, full-canvas vertical social-media advertisement poster for ${product}.
+Massive bold ${lever.font} headline at the top reading "${copy.headline}" (may break into two lines).
+Smaller subheadline directly below reading "${copy.subhead}".
+${checklist}${subject}
+${ctaLine}${logoLine}${lever.bg} background in ${colorA} and ${colorB}, with a subtle bold diagonal light streak. High-contrast, premium, magazine-grade, crisp typography, social-media ready, ready to post. ${SAFE_ZONE_RULE}`;
+}
+
 // ─── Split-layout background (text drawn by Sharp, not Ideogram) ─────────────
 // Ideogram renders ONLY a clean, text-free background. The headline/subhead/CTA
 // are composited afterward by lib/text-overlay.ts, so placement is guaranteed

@@ -2,8 +2,7 @@ import sharp from "sharp";
 import { generateImages, remixImage } from "./ideogram";
 import { loadImageBuffer, storeImage } from "./storage";
 import {
-  buildAdPromptFromBrief,
-  buildPromptFromMerged,
+  buildRichAdPrompt,
   buildStrategeAdPrompt,
   buildSplitBackgroundPrompt,
   buildStrategeBackgroundPrompt,
@@ -12,7 +11,7 @@ import {
 } from "./ad-prompt-builder";
 import { parseDescription } from "./ad-brief-parser";
 import { mergeWithDefaults } from "./ad-brief-merger";
-import { writeAdCopy, describeScreenshot } from "./ad-copy";
+import { writeAdCopy, writeBullets, describeScreenshot } from "./ad-copy";
 import { isStrategeBrand } from "./brand-locks";
 import { pickStrategePalette } from "./prompt-constants";
 import { compositeScreenshotInFrame, type FrameType } from "./device-frames";
@@ -79,9 +78,23 @@ export async function generateAd(
     };
   }
 
-  const prompt = stratege
-    ? buildStrategeAdPrompt({ copy: brief.copy, seed, forRemix: isExact })
-    : buildAdPromptFromBrief({ ...brief, lever }, colors, lever, isExact);
+  // User/product brands → rich full-canvas Ideogram poster (the "old workflow":
+  // Ideogram renders headline + bullets + product + logo + CTA natively).
+  let prompt: string;
+  if (stratege) {
+    prompt = buildStrategeAdPrompt({ copy: brief.copy, seed, forRemix: isExact });
+  } else {
+    const bullets = brief.copy.bullets ?? (await writeBullets({ product: brief.productName ?? "the product", brand }));
+    prompt = buildRichAdPrompt({
+      product: brief.productName ?? "the product",
+      description: brief.productDescription ?? "",
+      copy: { ...brief.copy, bullets },
+      colors,
+      lever,
+      brandName: String(brand.brand_name ?? ""),
+      forRemix: isExact,
+    });
+  }
 
   logPromptConsole(prompt);
 
@@ -173,20 +186,23 @@ export async function generateFromDescription(
     };
   }
 
-  const prompt = stratege
-    ? buildStrategeAdPrompt({
-        copy,
-        seed,
-        forRemix: isExact,
-        logoPresent: !!merged.logo,
-      })
-    : buildPromptFromMerged({
-        product,
-        description: opts.productDescription ?? "",
-        copy,
-        merged,
-        forRemix: isExact,
-      });
+  let prompt: string;
+  if (stratege) {
+    prompt = buildStrategeAdPrompt({ copy, seed, forRemix: isExact, logoPresent: !!merged.logo });
+  } else {
+    // User/product brands → rich full-canvas Ideogram poster.
+    copy.bullets = await writeBullets({ product, description: opts.description, brand });
+    const lever: AdLever = { side: merged.side, render: merged.render, font: merged.font, bg: merged.bg };
+    prompt = buildRichAdPrompt({
+      product,
+      description: opts.productDescription ?? "",
+      copy,
+      colors: merged.colors,
+      lever,
+      brandName: String(brand.brand_name ?? ""),
+      forRemix: isExact,
+    });
+  }
 
   logPromptConsole(prompt);
 

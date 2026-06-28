@@ -281,6 +281,44 @@ Return the JSON.`,
   return { headline: "Built for builders", subhead: `Meet ${product}`.slice(0, 90), cta: "Try it free" };
 }
 
+// ─── Rich-poster bullets (3 short feature points) ───────────────────────────
+const BULLETS_SYSTEM = `You write exactly 3 short feature/benefit bullet points for a product ad poster.
+
+Return STRICT JSON only: {"bullets": ["...", "...", "..."]}
+
+Each bullet: 1 to 3 words, a concrete product strength (e.g. "Cutting-edge technology", "All-day battery", "Sustainably built", "Tournament-grade"). Title case, no emojis, no punctuation, no quotes inside values. Make them specific to the product.`;
+
+export async function writeBullets(args: {
+  product: string;
+  description?: string;
+  brand: Record<string, unknown>;
+}): Promise<string[]> {
+  try {
+    const r = await chat({
+      model: "haiku",
+      system: BULLETS_SYSTEM,
+      temperature: 0.7,
+      maxTokens: 120,
+      messages: [
+        {
+          role: "user",
+          content: `Product: ${args.product}${
+            args.description ? `\nDetails: ${args.description}` : ""
+          }${args.brand.brand_name ? `\nBrand: ${args.brand.brand_name}` : ""}\n\nReturn the JSON.`,
+        },
+      ],
+    });
+    const s = r.text.indexOf("{");
+    const e = r.text.lastIndexOf("}");
+    if (s === -1 || e === -1) return [];
+    const obj = JSON.parse(r.text.slice(s, e + 1));
+    if (!Array.isArray(obj.bullets)) return [];
+    return obj.bullets.map((b: unknown) => cleanStr(b, 28)).filter(Boolean).slice(0, 3);
+  } catch {
+    return [];
+  }
+}
+
 export async function writeAdCopy(args: {
   product: string;
   description?: string;
