@@ -258,7 +258,6 @@ export async function generateScreenshotAd(
   // The mockup must stay within its own half (never cross the centre line),
   // so the text half stays clean for the Sharp-rendered copy.
   const isPortrait = framed.height > framed.width;
-  const pad = Math.round(AD_SIZE * 0.05);
   const half = AD_SIZE / 2;
   const boxW = (isPortrait ? 0.36 : 0.42) * AD_SIZE;
   const boxH = (isPortrait ? 0.74 : 0.6) * AD_SIZE;
