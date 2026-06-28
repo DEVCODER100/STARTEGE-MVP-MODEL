@@ -6,6 +6,7 @@ import {
   buildPromptFromMerged,
   buildStrategeAdPrompt,
   buildSplitBackgroundPrompt,
+  buildStrategeBackgroundPrompt,
   pickLever,
   resolveCombo,
 } from "./ad-prompt-builder";
@@ -59,6 +60,24 @@ export async function generateAd(
     brief.productSource === "upload" && brief.mode === "exact" && !!brief.photoUrl;
   // Stratège self-marketing → brand-locked prompt (palettes, hero, negatives).
   const stratege = isStrategeBrand(brand);
+
+  // Full-canvas Stratège ad → text-free background + deterministic Sharp text
+  // overlay (edge-safe). Remix (real product photo) keeps the Ideogram path.
+  if (stratege && !isExact) {
+    const r = await renderStrategeFullCanvas(brand, brief.copy, seed, lever.side);
+    return {
+      url: r.url,
+      copy: brief.copy,
+      mode: brief.mode ?? "text",
+      color: brief.color,
+      lever,
+      fallback: r.fallback,
+      debug: {
+        prompt: r.prompt,
+        levers: { stratege: true, deterministicText: true, palette: r.paletteName, side: lever.side },
+      },
+    };
+  }
 
   const prompt = stratege
     ? buildStrategeAdPrompt({ copy: brief.copy, seed, forRemix: isExact })
@@ -134,6 +153,26 @@ export async function generateFromDescription(
 
   const isExact = !!opts.photoUrl && opts.mode === "exact";
   const stratege = isStrategeBrand(brand);
+
+  // Full-canvas Stratège ad → text-free background + deterministic Sharp text.
+  if (stratege && !isExact) {
+    const r = await renderStrategeFullCanvas(brand, copy, seed, merged.side);
+    return {
+      url: r.url,
+      copy,
+      mode: opts.mode ?? "text",
+      color: "brand",
+      lever: pickLever(seed),
+      fallback: r.fallback,
+      debug: {
+        prompt: r.prompt,
+        parsedFields: parsed,
+        mergedFields: merged,
+        levers: { stratege: true, deterministicText: true, palette: r.paletteName, side: merged.side },
+      },
+    };
+  }
+
   const prompt = stratege
     ? buildStrategeAdPrompt({
         copy,
@@ -241,19 +280,33 @@ export async function generateScreenshotAd(
     ? pickStrategePalette(seedHash(seed))
     : { bg: merged.colors[0], accent: merged.colors[1], text: "" };
 
-  const prompt = buildSplitBackgroundPrompt({
-    bg: palette.bg,
-    accent: palette.accent,
-    mockupSide,
-    brandLocked: stratege,
-  });
-  logPromptConsole(prompt);
-  const result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
-
-  // 6a) Composite the framed screenshot onto the reserved (mockup) side.
-  const bg = await sharp(await loadImageBuffer(result.urls[0]))
-    .resize(AD_SIZE, AD_SIZE, { fit: "cover" })
-    .toBuffer();
+  // Stratège self-marketing → FLAT Sharp brand-color field, no Ideogram at all
+  //   (zero stray marks, zero API cost, instant). User brands → text-free
+  //   Ideogram background in their own colors.
+  let bg: Buffer;
+  let fallback = false;
+  let prompt: string;
+  if (stratege) {
+    prompt = "(flat Sharp brand-color background — no Ideogram)";
+    bg = await sharp({
+      create: { width: AD_SIZE, height: AD_SIZE, channels: 3, background: hexToRgb(palette.bg) },
+    })
+      .jpeg({ quality: 95 })
+      .toBuffer();
+  } else {
+    prompt = buildSplitBackgroundPrompt({
+      bg: palette.bg,
+      accent: palette.accent,
+      mockupSide,
+      brandLocked: false,
+    });
+    logPromptConsole(prompt);
+    const result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
+    fallback = result.fallback;
+    bg = await sharp(await loadImageBuffer(result.urls[0]))
+      .resize(AD_SIZE, AD_SIZE, { fit: "cover" })
+      .toBuffer();
+  }
 
   // The mockup must stay within its own half (never cross the centre line),
   // so the text half stays clean for the Sharp-rendered copy.
@@ -294,7 +347,7 @@ export async function generateScreenshotAd(
     mode: "text",
     color: "brand",
     lever: pickLever(seed),
-    fallback: result.fallback,
+    fallback,
     debug: {
       prompt,
       parsedFields: { visionDesc, frameType: opts.frameType, mockupSide, textSide },
@@ -302,6 +355,49 @@ export async function generateScreenshotAd(
       levers: { palette, mockupSide, textSide, frameType: opts.frameType },
     },
   };
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace("#", "");
+  return {
+    r: parseInt(h.slice(0, 2), 16) || 0,
+    g: parseInt(h.slice(2, 4), 16) || 0,
+    b: parseInt(h.slice(4, 6), 16) || 0,
+  };
+}
+
+// Full-canvas Stratège self-marketing ad: text-free Stratège hero background
+// (Ideogram) + Sharp-drawn copy in the brand serif, inside the 5% safe zone.
+async function renderStrategeFullCanvas(
+  brand: Record<string, unknown>,
+  copy: AdCopy,
+  seed: string,
+  side: AdLever["side"]
+): Promise<{ url: string; fallback: boolean; prompt: string; paletteName: string }> {
+  void brand;
+  const palette = pickStrategePalette(seedHash(seed));
+  const textSide: "left" | "right" = side === "left" ? "left" : "right";
+  const prompt = buildStrategeBackgroundPrompt({
+    bg: palette.bg,
+    accent: palette.accent,
+    textSide,
+    seed,
+  });
+  logPromptConsole(prompt);
+  const result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
+  const bg = await sharp(await loadImageBuffer(result.urls[0]))
+    .resize(AD_SIZE, AD_SIZE, { fit: "cover" })
+    .toBuffer();
+  const final = await drawSplitAdText(bg, {
+    textSide,
+    headline: copy.headline,
+    subhead: copy.subhead,
+    cta: copy.cta,
+    palette: { bg: palette.bg, accent: palette.accent, text: palette.text },
+  });
+  const url = await storeImage(final, "jpg");
+  await logPromptFile(prompt, url);
+  return { url, fallback: result.fallback, prompt, paletteName: palette.name };
 }
 
 // FNV-1a hash for palette rotation (mirrors ad-prompt-builder).

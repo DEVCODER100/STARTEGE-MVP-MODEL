@@ -180,6 +180,24 @@ Smaller subheadline beneath it reading "${copy.subhead}".
 ${ctaLine}${SAFE_ZONE_RULE} Minimal, high-contrast, magazine-grade, crisp typography, generous negative space, social-media ready, ready to post.`;
 }
 
+// ─── Stratège full-canvas background (text drawn by Sharp) ───────────────────
+// Text-free Stratège hero/background. The headline/subhead/CTA are composited
+// afterward by lib/text-overlay.ts, so they're always inside the safe zone.
+export function buildStrategeBackgroundPrompt(opts: {
+  bg: string;
+  accent: string;
+  textSide: "left" | "right";
+  seed: string;
+}): string {
+  const { bg, accent, textSide, seed } = opts;
+  const heroSide = textSide === "left" ? "right" : "left";
+  const hero = pickHeroTreatment(hash(seed) >> 5);
+  return `A warm, editorial Stratège brand background for a social-media advertisement — founder-personal, magazine-grade. NO text of any kind.
+${bg} background with subtle ${accent} accents. On the ${heroSide} side: ${hero}. Keep the ${textSide} side a calm, even ${bg} field with generous negative space for text to be added later.
+Render NO text, NO letters, NO words, NO numbers, NO headline, NO captions, NO labels, NO logos, NO UI, and ${NO_FAKE_UI}.
+Absolutely ${BANNED_COLORS}. Warm, editorial, generous negative space, crisp, high quality. Absolutely no text anywhere in the image.`;
+}
+
 // ─── Stratège self-marketing lock ───────────────────────────────────────────
 // Builds a fully brand-locked prompt for Stratège's OWN ads. Enforces the
 // visual locks: only the 3 approved palettes (Lock 1), one concrete hero scene
