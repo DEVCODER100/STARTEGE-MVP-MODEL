@@ -1,6 +1,7 @@
 import { chat } from "./claude";
 import type { AdCopy, ColorCombo } from "./ad-brief";
 import { COLOR_COMBO_IDS } from "./ad-brief";
+import { HEADLINE_FULL, HEADLINE_SPLIT } from "./prompt-constants";
 import {
   isStrategeBrand,
   isBannedHeadline,
@@ -102,7 +103,7 @@ Return STRICT JSON only:
 {"headline": "...", "subhead": "...", "cta": "...", "color": "..."}
 
 Rules:
-- headline: 2 to 5 words, punchy, scroll-stopping. Title case or UPPERCASE feel. No period.
+- headline: ${HEADLINE_FULL}, punchy, scroll-stopping. Title case or UPPERCASE feel. No period.
 - subhead: 3 to 8 words, supports the headline.
 - cta: 1 to 3 words button text (e.g. "Shop Now", "Discover", "Order Today").
 - color: pick ONE of: ${COLOR_COMBO_IDS.join(", ")} — choose what best fits the product/brand mood.
@@ -192,11 +193,11 @@ Headlines must:
 - Use specific, founder-relevant language: "Ship faster", "Stop [pain point]", "Built for [specific user]".
 - Match the product's apparent category (productivity, design, analytics, etc) — infer it from the product description provided.
 
-These ads use a SPLIT-HALF layout: the headline sits in only HALF the canvas width (the other half holds a product screenshot). So the headline MUST be 2-3 words maximum, a single line, with no single word longer than 10 characters. Short and punchy.
+These ads use a SPLIT-HALF layout: the headline sits in only HALF the canvas width (the other half holds a product screenshot). So the headline MUST be ${HEADLINE_SPLIT}. Short and punchy.
 Good examples: "Ship faster." / "Built for founders." / "The desk is open." / "Post in minutes."
 Bad examples (too long): "Turn your business moments into finished marketing" / "Strategy made simple for modern founders"
 
-Lengths: headline 2-3 words (split-half rule above); subhead 4-9 words; cta 1-3 words (e.g. "Try it free", "Start building", "See it live"). No emojis, no hashtags, no quotes inside values.`;
+Lengths: headline ${HEADLINE_SPLIT}; subhead 4-9 words; cta 1-3 words (e.g. "Try it free", "Start building", "See it live"). No emojis, no hashtags, no quotes inside values.`;
 
 const BANNED_SAAS_WORDS = [
   "ai-powered", "ai powered", "intelligent", "cutting-edge", "cutting edge",

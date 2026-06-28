@@ -12,13 +12,16 @@
 // negative / banned-color rules now live in ./prompt-constants (single source of
 // truth across all five templates). Re-exported here for back-compat.
 export {
+  BRAND_PALETTES,
   STRATEGE_PALETTES,
   pickStrategePalette,
   HERO_TREATMENTS,
   pickHeroTreatment,
-  NEGATIVE_VISUAL_ELEMENTS,
-  BANNED_COLOR_TERMS,
+  NO_FAKE_UI,
+  BANNED_COLORS,
   COMPOSITION_RULES,
+  SAFE_ZONE_RULE,
+  type BrandPalette,
   type StrategePalette,
 } from "./prompt-constants";
 

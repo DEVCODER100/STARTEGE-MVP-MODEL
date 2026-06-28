@@ -3,8 +3,8 @@ import { PALETTES, type AdBrief, type AdCopy, type AdLever, type ColorCombo } fr
 import {
   pickStrategePalette,
   pickHeroTreatment,
-  NEGATIVE_VISUAL_ELEMENTS,
-  BANNED_COLOR_TERMS,
+  NO_FAKE_UI,
+  BANNED_COLORS,
   SAFE_ZONE_RULE,
   compositionBlock,
 } from "./prompt-constants";
@@ -173,7 +173,7 @@ export function buildScreenshotAdPrompt(opts: {
   const category = visionDesc ? `It is a software product: ${visionDesc} ` : "";
 
   return `A bold, modern social-media advertisement poster for a software product. ${category}
-Keep the entire ${mockupSide} half of the composition as clean, empty negative space — a product screenshot will be placed there separately. Do NOT draw any device, laptop, phone, browser window, app screen, dashboard, chart, or any user interface anywhere in the image.
+Keep the entire ${mockupSide} half of the composition as clean, empty negative space — a product screenshot will be placed there separately. ${cap(NO_FAKE_UI)}.
 ${bg} background in ${colorA} and ${colorB}.
 Large bold ${font} headline on the ${textSide} reading "${copy.headline}".
 Smaller subheadline beneath it reading "${copy.subhead}".
@@ -212,13 +212,13 @@ export function buildStrategeAdPrompt(opts: {
 
 Hero: ${hero}.
 
-Color palette — use ONLY these three colors: ${pal.bg} background, ${pal.accent} accent, ${pal.text} text. Warm, editorial, high-contrast. ${BANNED_COLOR_TERMS}
+Color palette — use ONLY these three colors: ${pal.bg} background, ${pal.accent} accent, ${pal.text} text. Warm, editorial, high-contrast. Absolutely ${BANNED_COLORS}.
 
 Large bold serif headline as the focal point reading "${copy.headline}".
 Smaller subheadline reading "${copy.subhead}".
 ${ctaLine}${logoLine}
 
-${NEGATIVE_VISUAL_ELEMENTS}
+${cap(NO_FAKE_UI)}.
 
 ${compositionBlock()}
 
@@ -246,15 +246,13 @@ export function buildStrategeScreenshotAdPrompt(opts: {
 
   return `A warm, editorial social-media advertisement poster for Stratège — a content thinking partner for founders. Founder-personal and magazine-grade. This is NOT a generic SaaS ad.
 
-Keep the entire ${mockupSide} half of the composition as clean, empty negative space — a product screenshot will be placed there separately. Do NOT draw any device, laptop, phone, browser window, app screen, dashboard, chart, or any user interface anywhere in the image.
+Keep the entire ${mockupSide} half of the composition as clean, empty negative space — a product screenshot will be placed there separately. ${cap(NO_FAKE_UI)}.
 
-Color palette — use ONLY these three colors: ${pal.bg} background, ${pal.accent} accent, ${pal.text} text. Warm, editorial, high-contrast. ${BANNED_COLOR_TERMS}
+Color palette — use ONLY these three colors: ${pal.bg} background, ${pal.accent} accent, ${pal.text} text. Warm, editorial, high-contrast. Absolutely ${BANNED_COLORS}.
 
 Large bold serif headline on the ${textSide} reading "${copy.headline}".
 Smaller subheadline beneath it reading "${copy.subhead}".
 ${ctaLine}
-
-${NEGATIVE_VISUAL_ELEMENTS}
 
 ${compositionBlock()}
 

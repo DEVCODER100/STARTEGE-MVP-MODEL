@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { buildSystemPrompt, type Mode } from "@/lib/prompts";
 import { chat } from "@/lib/claude";
 import { generateImages } from "@/lib/ideogram";
+import { SAFE_ZONE_RULE } from "@/lib/prompt-constants";
 import { limits } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -186,10 +187,11 @@ export async function POST(req: Request) {
 
     // 6) Generate images (3 variations). Falls back to placeholders when
     //    IDEOGRAM_API_KEY is not set so the UI is fully testable.
-    const imagePrompt =
+    const baseImagePrompt =
       task.image_prompt && task.image_prompt.length > 20
         ? task.image_prompt
         : `A clean professional ad for ${brand.brand_name || "the brand"} — ${task.idea}. Match Indian context if relevant. Format 1080x1350 portrait. Ultra high quality.`;
+    const imagePrompt = `${baseImagePrompt} ${SAFE_ZONE_RULE}`;
 
     const imgs = await generateImages({ prompt: imagePrompt, count: 3 });
 

@@ -1,33 +1,32 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// SHARED PROMPT CONSTANTS — single source of truth for every image template.
+// SHARED PROMPT CONSTANTS — single source of truth for ALL image prompts.
 //
-// All five templates in lib/ad-prompt-builder.ts import these. Change a rule
-// here once and it applies everywhere — no more per-template drift (which caused
-// off-brand palettes + text-cut-off bugs). This module imports nothing (leaf),
-// so it's safe to import from anywhere.
+// Every prompt-building function imports from here. No function keeps its own
+// hardcoded copy of these rules — change a rule once and it applies everywhere.
+// This module imports nothing (leaf), so it's safe to import from anywhere.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Keep every headline / subhead / CTA away from the canvas edges.
 export const SAFE_ZONE_RULE =
-  "All text must stay within a safe zone of at least 5% padding from every edge of the canvas. No text touches or crosses the canvas edges. Keep all headlines, subheadlines, and CTA buttons fully inside the visible frame.";
-
-// Things that must never appear (full "DO NOT include:" sentence).
-export const NEGATIVE_VISUAL_ELEMENTS =
-  "DO NOT include: fake dashboards, chart mockups, bar graphs or line graphs, pie charts, generic UI fragments, abstract data visualizations, floating cards with fake numbers, analytics interfaces, robot or AI imagery, brain illustrations, lightbulb 'idea' icons, speed lines, lightning bolts, or rockets.";
+  "All text stays within 5% padding from every canvas edge. No text touches or crosses edges.";
 
 // Off-brand colors that drift the look toward generic SaaS (incl. the navy that
-// broke the diagnosed ad).
-export const BANNED_COLOR_TERMS =
-  "Absolutely no purple, violet, indigo, neon colors, bright blue gradients, navy corporate tones, rainbow gradients, or SaaS purple-to-pink gradients.";
+// broke the diagnosed ad). Applied only where brand-locking is appropriate.
+export const BANNED_COLORS =
+  "no purple, violet, indigo, neon, bright blue, navy corporate, rainbow, SaaS purple-to-pink";
+
+// Things the model must never draw itself (esp. on screenshot ads, where the
+// real screenshot is composited in afterward).
+export const NO_FAKE_UI =
+  "no dashboards, charts, graphs, floating UI cards, robot/AI imagery, device mockups drawn by the model";
+
+// Headline length per layout.
+export const HEADLINE_SPLIT = "2-3 words, single line, no word over 10 chars";
+export const HEADLINE_FULL = "2-5 words";
 
 // Core hierarchy rules (wrapped as "Composition rules — strict: …" by templates).
 export const COMPOSITION_RULES =
   "ONE dominant focal point; ONE supporting element; negative space at least 40% of the frame; CTA solid-filled, high-contrast; every element must relate to the message.";
-
-// Headline length per layout.
-export const HEADLINE_LENGTH_FULL = "2-5 words";
-export const HEADLINE_LENGTH_SPLIT =
-  "2-3 words, single line, no word longer than 10 characters";
 
 // The composition block templates drop in (core rules + safe zone, always together).
 export function compositionBlock(): string {
@@ -35,7 +34,7 @@ export function compositionBlock(): string {
 }
 
 // ─── Brand-locked palettes (Stratège self-marketing) ─────────────────────────
-export interface StrategePalette {
+export interface BrandPalette {
   name: string;
   bg: string;
   accent: string;
@@ -43,21 +42,25 @@ export interface StrategePalette {
   weight: number; // rotation weight (must sum to 100)
 }
 
-export const STRATEGE_PALETTES: StrategePalette[] = [
+export const BRAND_PALETTES: BrandPalette[] = [
   { name: "cream", bg: "#F5F1EA", accent: "#1D9E75", text: "#1A1A1A", weight: 60 },
   { name: "green", bg: "#1D9E75", accent: "#F5F1EA", text: "#FFFFFF", weight: 25 },
   { name: "noir", bg: "#0A0C0F", accent: "#5DCAA5", text: "#F0F0F0", weight: 15 },
 ];
 
+// Backwards-compatible alias (older imports used STRATEGE_PALETTES).
+export const STRATEGE_PALETTES = BRAND_PALETTES;
+export type StrategePalette = BrandPalette;
+
 // Weighted pick from a stable hash (0..n). 60% cream / 25% green / 15% noir.
-export function pickStrategePalette(h: number): StrategePalette {
+export function pickStrategePalette(h: number): BrandPalette {
   const pct = h % 100;
   let acc = 0;
-  for (const p of STRATEGE_PALETTES) {
+  for (const p of BRAND_PALETTES) {
     acc += p.weight;
     if (pct < acc) return p;
   }
-  return STRATEGE_PALETTES[0];
+  return BRAND_PALETTES[0];
 }
 
 // Approved hero scenes — each one concrete, never an abstract concept.

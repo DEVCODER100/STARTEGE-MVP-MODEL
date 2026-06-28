@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getOrCreateUser } from "@/lib/users";
 import { getDb } from "@/lib/db";
 import { generateImages } from "@/lib/ideogram";
+import { SAFE_ZONE_RULE } from "@/lib/prompt-constants";
 import { inspect, logSecurityEvent } from "@/lib/security";
 import {
   canGenerateImage,
@@ -71,6 +72,7 @@ TEXT RULES — CRITICAL (image models garble long text):
 - AT MOST one short headline: 3 to 5 words maximum.
 - NO sentences, NO paragraphs, NO body text, NO small print.
 - If unsure, use fewer words or none — a clean visual beats garbled text.
+SAFE ZONE: ${SAFE_ZONE_RULE}
 MOOD: focused, credible, indie-hacker.`;
 
     const result = await generateImages({
