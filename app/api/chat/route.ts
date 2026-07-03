@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { getOrCreateUser } from "@/lib/users";
 import { getDb } from "@/lib/db";
 import { buildSystemPrompt, type Mode } from "@/lib/prompts";
+import { brainContext } from "@/lib/brain";
 import { chat } from "@/lib/claude";
 import { generateCaption } from "@/lib/image-brief";
 import {
@@ -23,14 +24,15 @@ import { describeProduct, writeAdCopy, editAdCopy } from "@/lib/ad-copy";
 import { loadImageBuffer, isAllowedImageUrl } from "@/lib/storage";
 import { inspect, limits, logSecurityEvent } from "@/lib/security";
 import {
-  canGeneratePost,
-  consumePost,
+  consumePostIfAllowed,
+  refundPost,
   canGenerateImage,
   consumeImage,
   getUsage,
   MVP_LIMIT_MESSAGE,
 } from "@/lib/usage";
 import { logEvent } from "@/lib/events";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -475,8 +477,9 @@ export async function POST(req: Request) {
     }
 
     // ───── TEXT PATH (counts toward 10/day messages) ─────
-    const allowedMsg = await canGeneratePost(user.id);
-    if (!allowedMsg) {
+    // Atomically reserve the slot up front (enforces the cap in one write).
+    const reserved = await consumePostIfAllowed(user.id);
+    if (!reserved.ok) {
       await logEvent(user.id, "limit_hit", { limitType: "messages" });
       const usage = await getUsage(user.id);
       await sql`
@@ -493,7 +496,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const system = buildSystemPrompt(brand, mode as Mode);
+    const system = buildSystemPrompt(brand, mode as Mode) + brainContext();
 
     let reply: string;
     let modelUsed: string;
@@ -510,6 +513,8 @@ export async function POST(req: Request) {
         modelUsed = "fallback";
         fallback = true;
       } else {
+        // Real failure — give back the reserved slot before bubbling up.
+        await refundPost(user.id);
         throw e;
       }
     }
@@ -520,7 +525,7 @@ export async function POST(req: Request) {
     `;
     await sql`UPDATE chats SET updated_at = now() WHERE id = ${chatId}`;
 
-    await consumePost(user.id);
+    // Slot already reserved atomically above.
     await logEvent(user.id, "post_generated", { kind: "chat", fallback });
 
     const usage = await getUsage(user.id);
@@ -532,8 +537,6 @@ export async function POST(req: Request) {
       chatId,
     });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e);
   }
 }
