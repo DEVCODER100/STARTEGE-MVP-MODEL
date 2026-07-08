@@ -2,16 +2,13 @@ import sharp from "sharp";
 import { generateImages, remixImage } from "./ideogram";
 import { loadImageBuffer, storeImage } from "./storage";
 import {
-  buildRichAdPrompt,
-  buildStrategeAdPrompt,
-  buildSplitBackgroundPrompt,
-  buildStrategeBackgroundPrompt,
+  buildBackgroundPrompt,
   pickLever,
   resolveCombo,
 } from "./ad-prompt-builder";
 import { parseDescription } from "./ad-brief-parser";
 import { mergeWithDefaults } from "./ad-brief-merger";
-import { writeAdCopy, writeBullets, describeScreenshot } from "./ad-copy";
+import { writeAdCopy, describeScreenshot } from "./ad-copy";
 import { isStrategeBrand } from "./brand-locks";
 import { pickStrategePalette } from "./prompt-constants";
 import { compositeScreenshotInFrame, type FrameType } from "./device-frames";
@@ -19,11 +16,13 @@ import { drawSplitAdText } from "./text-overlay";
 import { logPromptConsole, logPromptFile } from "./prompt-log";
 import type { AdBrief, AdCopy, AdLever, AdMode, ColorCombo } from "./ad-brief";
 
-// Ad Studio generation pipeline (native-text ads).
-//   exact     → Ideogram v4 remix (keeps the real uploaded product)
-//   lookalike → Ideogram v4 generate from a vision description
-//   text      → Ideogram v4 generate from the typed product name
-// Ideogram renders ALL text; there is no code overlay step here.
+// Ad generation pipeline. Ideogram renders ONLY a text-free background (a hero
+// scene / the product / a flat brand field); ALL ad text is drawn afterward by
+// Sharp (lib/text-overlay.ts), so spelling is always correct and text always
+// lands inside the safe zone. One text engine for every brand.
+//   exact     → Ideogram v4 remix (keeps the real uploaded product), text-free
+//   lookalike → Ideogram v4 generate the product, text-free
+//   text      → Ideogram v4 generate from the typed product name, text-free
 
 const REMIX_IMAGE_WEIGHT = 68; // 60-75: keep product recognisable, allow new bg+text
 
@@ -57,82 +56,37 @@ export async function generateAd(
   const colors = resolveCombo(brief.color, brand);
   const isExact =
     brief.productSource === "upload" && brief.mode === "exact" && !!brief.photoUrl;
-  // Stratège self-marketing → brand-locked prompt (palettes, hero, negatives).
   const stratege = isStrategeBrand(brand);
+  const palette = stratege
+    ? pickStrategePalette(seedHash(seed))
+    : { bg: colors[0], accent: colors[1], text: "" };
 
-  // Full-canvas Stratège ad → text-free background + deterministic Sharp text
-  // overlay (edge-safe). Remix (real product photo) keeps the Ideogram path.
-  if (stratege && !isExact) {
-    const r = await renderStrategeFullCanvas(brand, brief.copy, seed, lever.side);
-    return {
-      url: r.url,
-      copy: brief.copy,
-      mode: brief.mode ?? "text",
-      color: brief.color,
-      lever,
-      fallback: r.fallback,
-      debug: {
-        prompt: r.prompt,
-        levers: { stratege: true, deterministicText: true, palette: r.paletteName, side: lever.side },
-      },
-    };
-  }
-
-  // User/product brands → rich full-canvas Ideogram poster (the "old workflow":
-  // Ideogram renders headline + bullets + product + logo + CTA natively).
-  let prompt: string;
-  if (stratege) {
-    prompt = buildStrategeAdPrompt({ copy: brief.copy, seed, forRemix: isExact });
-  } else {
-    const bullets = brief.copy.bullets ?? (await writeBullets({ product: brief.productName ?? "the product", brand }));
-    prompt = buildRichAdPrompt({
-      product: brief.productName ?? "the product",
-      description: brief.productDescription ?? "",
-      copy: { ...brief.copy, bullets },
-      colors,
-      lever,
-      brandName: String(brand.brand_name ?? ""),
-      forRemix: isExact,
-    });
-  }
-
-  logPromptConsole(prompt);
-
-  let result;
-  if (isExact) {
-    const buf = await loadImageBuffer(brief.photoUrl!);
-    result = await remixImage({
-      prompt,
-      imageBuffer: buf,
-      imageWeight: REMIX_IMAGE_WEIGHT,
-      aspectRatio: "ASPECT_1_1",
-    });
-  } else {
-    result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
-  }
-
-  // Re-host on our own storage so the URL is stable + editable later.
-  const buf = await loadImageBuffer(result.urls[0]);
-  const url = await storeImage(buf, "jpg");
-  await logPromptFile(prompt, url);
+  const r = await renderFullCanvasAd({
+    copy: brief.copy,
+    seed,
+    side: lever.side,
+    brandLocked: stratege,
+    palette,
+    product: brief.productName ?? "the product",
+    render: lever.render,
+    photoUrl: isExact ? brief.photoUrl : undefined,
+  });
 
   return {
-    url,
+    url: r.url,
     copy: brief.copy,
     mode: brief.mode ?? "text",
     color: brief.color,
     lever,
-    fallback: result.fallback,
+    fallback: r.fallback,
     debug: {
-      prompt,
+      prompt: r.prompt,
       levers: {
         stratege,
-        color: brief.color,
+        deterministicText: true,
         colors: stratege ? "brand-locked" : colors,
         side: lever.side,
         render: lever.render,
-        font: lever.font,
-        background: lever.bg,
       },
     },
   };
@@ -166,83 +120,38 @@ export async function generateFromDescription(
 
   const isExact = !!opts.photoUrl && opts.mode === "exact";
   const stratege = isStrategeBrand(brand);
+  const palette = stratege
+    ? pickStrategePalette(seedHash(seed))
+    : { bg: merged.colors[0], accent: merged.colors[1], text: "" };
 
-  // Full-canvas Stratège ad → text-free background + deterministic Sharp text.
-  if (stratege && !isExact) {
-    const r = await renderStrategeFullCanvas(brand, copy, seed, merged.side);
-    return {
-      url: r.url,
-      copy,
-      mode: opts.mode ?? "text",
-      color: "brand",
-      lever: pickLever(seed),
-      fallback: r.fallback,
-      debug: {
-        prompt: r.prompt,
-        parsedFields: parsed,
-        mergedFields: merged,
-        levers: { stratege: true, deterministicText: true, palette: r.paletteName, side: merged.side },
-      },
-    };
-  }
-
-  let prompt: string;
-  if (stratege) {
-    prompt = buildStrategeAdPrompt({ copy, seed, forRemix: isExact, logoPresent: !!merged.logo });
-  } else {
-    // User/product brands → rich full-canvas Ideogram poster.
-    copy.bullets = await writeBullets({ product, description: opts.description, brand });
-    const lever: AdLever = { side: merged.side, render: merged.render, font: merged.font, bg: merged.bg };
-    prompt = buildRichAdPrompt({
-      product,
-      description: opts.productDescription ?? "",
-      copy,
-      colors: merged.colors,
-      lever,
-      brandName: String(brand.brand_name ?? ""),
-      forRemix: isExact,
-    });
-  }
-
-  logPromptConsole(prompt);
-
-  let result;
-  if (isExact) {
-    const buf = await loadImageBuffer(opts.photoUrl!);
-    result = await remixImage({
-      prompt,
-      imageBuffer: buf,
-      imageWeight: REMIX_IMAGE_WEIGHT,
-      aspectRatio: "ASPECT_1_1",
-    });
-  } else {
-    result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
-  }
-
-  const buf = await loadImageBuffer(result.urls[0]);
-  const url = await storeImage(buf, "jpg");
-  await logPromptFile(prompt, url);
+  const r = await renderFullCanvasAd({
+    copy,
+    seed,
+    side: merged.side,
+    brandLocked: stratege,
+    palette,
+    product: opts.productDescription || product,
+    render: merged.render,
+    photoUrl: isExact ? opts.photoUrl : undefined,
+  });
 
   return {
-    url,
+    url: r.url,
     copy,
     mode: opts.mode ?? "text",
     color: "brand",
     lever: pickLever(seed),
-    fallback: result.fallback,
+    fallback: r.fallback,
     debug: {
-      prompt,
+      prompt: r.prompt,
       parsedFields: parsed,
       mergedFields: stratege ? { ...merged, colors: "brand-locked" } : merged,
       levers: {
         stratege,
+        deterministicText: true,
         colors: stratege ? "brand-locked" : merged.colors,
         side: merged.side,
         render: merged.render,
-        font: merged.font,
-        background: merged.bg,
-        lighting: merged.lighting,
-        mood: merged.mood,
       },
     },
   };
@@ -296,33 +205,16 @@ export async function generateScreenshotAd(
     ? pickStrategePalette(seedHash(seed))
     : { bg: merged.colors[0], accent: merged.colors[1], text: "" };
 
-  // Stratège self-marketing → FLAT Sharp brand-color field, no Ideogram at all
-  //   (zero stray marks, zero API cost, instant). User brands → text-free
-  //   Ideogram background in their own colors.
-  let bg: Buffer;
-  let fallback = false;
-  let prompt: string;
-  if (stratege) {
-    prompt = "(flat Sharp brand-color background — no Ideogram)";
-    bg = await sharp({
-      create: { width: AD_SIZE, height: AD_SIZE, channels: 3, background: hexToRgb(palette.bg) },
-    })
-      .jpeg({ quality: 95 })
-      .toBuffer();
-  } else {
-    prompt = buildSplitBackgroundPrompt({
-      bg: palette.bg,
-      accent: palette.accent,
-      mockupSide,
-      brandLocked: false,
-    });
-    logPromptConsole(prompt);
-    const result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
-    fallback = result.fallback;
-    bg = await sharp(await loadImageBuffer(result.urls[0]))
-      .resize(AD_SIZE, AD_SIZE, { fit: "cover" })
-      .toBuffer();
-  }
+  // FLAT Sharp brand-color field for ALL screenshot ads — exact palette, no
+  // Ideogram (zero stray marks / color drift, zero API cost, instant). Then
+  // composite the framed screenshot + Sharp text on top.
+  const prompt = "(flat Sharp brand-color background — no Ideogram)";
+  const fallback = false;
+  const bg = await sharp({
+    create: { width: AD_SIZE, height: AD_SIZE, channels: 3, background: hexToRgb(palette.bg) },
+  })
+    .jpeg({ quality: 95 })
+    .toBuffer();
 
   // The mockup must stay within its own half (never cross the centre line),
   // so the text half stays clean for the Sharp-rendered copy.
@@ -382,25 +274,48 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
   };
 }
 
-// Full-canvas Stratège self-marketing ad: text-free Stratège hero background
-// (Ideogram) + Sharp-drawn copy in the brand serif, inside the 5% safe zone.
-async function renderStrategeFullCanvas(
-  brand: Record<string, unknown>,
-  copy: AdCopy,
-  seed: string,
-  side: AdLever["side"]
-): Promise<{ url: string; fallback: boolean; prompt: string; paletteName: string }> {
-  void brand;
-  const palette = pickStrategePalette(seedHash(seed));
+// Full-canvas ad (any brand): Ideogram renders a TEXT-FREE background — a hero
+// scene (Stratège), the product (user), or a remix of the real product photo —
+// then Sharp draws the copy inside the 5% safe zone. One path for all brands.
+async function renderFullCanvasAd(opts: {
+  copy: AdCopy;
+  seed: string;
+  side: AdLever["side"];
+  brandLocked: boolean;
+  palette: { bg: string; accent: string; text: string };
+  product?: string;
+  render?: string;
+  photoUrl?: string; // present → remix (keep the real product)
+}): Promise<{ url: string; fallback: boolean; prompt: string }> {
+  const { copy, seed, side, brandLocked, palette, product, render, photoUrl } = opts;
   const textSide: "left" | "right" = side === "left" ? "left" : "right";
-  const prompt = buildStrategeBackgroundPrompt({
+  const forRemix = !!photoUrl;
+
+  const prompt = buildBackgroundPrompt({
     bg: palette.bg,
     accent: palette.accent,
     textSide,
     seed,
+    brandLocked,
+    product,
+    render,
+    forRemix,
   });
   logPromptConsole(prompt);
-  const result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
+
+  let result;
+  if (forRemix) {
+    const buf = await loadImageBuffer(photoUrl!);
+    result = await remixImage({
+      prompt,
+      imageBuffer: buf,
+      imageWeight: REMIX_IMAGE_WEIGHT,
+      aspectRatio: "ASPECT_1_1",
+    });
+  } else {
+    result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
+  }
+
   const bg = await sharp(await loadImageBuffer(result.urls[0]))
     .resize(AD_SIZE, AD_SIZE, { fit: "cover" })
     .toBuffer();
@@ -409,11 +324,11 @@ async function renderStrategeFullCanvas(
     headline: copy.headline,
     subhead: copy.subhead,
     cta: copy.cta,
-    palette: { bg: palette.bg, accent: palette.accent, text: palette.text },
+    palette,
   });
   const url = await storeImage(final, "jpg");
   await logPromptFile(prompt, url);
-  return { url, fallback: result.fallback, prompt, paletteName: palette.name };
+  return { url, fallback: result.fallback, prompt };
 }
 
 // FNV-1a hash for palette rotation (mirrors ad-prompt-builder).
