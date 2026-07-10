@@ -20,6 +20,12 @@ export const BANNED_COLORS =
 export const NO_FAKE_UI =
   "no dashboards, charts, graphs, floating UI cards, robot/AI imagery, device mockups drawn by the model";
 
+// The no-product rule (single source of truth). Used ONLY when no product image
+// was uploaded and no product was named — the engine must NEVER invent a hero
+// product (never infer one from the brand name).
+export const NO_PRODUCTS =
+  "Do NOT depict any product, device, gadget, object, item, person, figure, logo, or mockup — an abstract background only. Never infer a product from the brand name.";
+
 // Headline length per layout.
 export const HEADLINE_SPLIT = "2-3 words, single line, no word over 10 chars";
 export const HEADLINE_FULL = "2-5 words";

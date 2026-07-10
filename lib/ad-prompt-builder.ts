@@ -1,6 +1,6 @@
 import { resolveBrandColor } from "./creative-direction";
 import { PALETTES, type AdLever, type ColorCombo } from "./ad-brief";
-import { pickHeroTreatment, NO_FAKE_UI, BANNED_COLORS } from "./prompt-constants";
+import { pickHeroTreatment, NO_FAKE_UI, NO_PRODUCTS, BANNED_COLORS } from "./prompt-constants";
 
 // Prompt building for the image engine. Ideogram renders ONLY text-free
 // backgrounds; ALL ad text is drawn deterministically by Sharp
@@ -112,7 +112,7 @@ export function buildBackgroundPrompt(opts: {
   } else if (hasProduct) {
     sceneLine = `On the ${heroSide} side: ${product!.trim()} shown large and photorealistic${render ? `, ${render}` : ""}.`;
   } else {
-    sceneLine = `A calm, abstract, on-brand composition — soft ${accent} gradient light, gentle geometric shapes and subtle texture, premium and editorial. Do NOT include any product, object, device, person, figure, logo, or mockup.`;
+    sceneLine = `A calm, abstract, on-brand composition — soft ${accent} gradient light, gentle geometric shapes and subtle texture, premium and editorial. ${NO_PRODUCTS}`;
   }
 
   const brandLine = brandLocked
