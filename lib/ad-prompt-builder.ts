@@ -100,16 +100,19 @@ export function buildBackgroundPrompt(opts: {
 }): string {
   const { bg, accent, textSide, seed, brandLocked, product, render, forRemix } = opts;
   const heroSide = textSide === "left" ? "right" : "left";
+  const hasProduct = !!(product && product.trim());
 
-  let hero: string;
+  // Only render a product when one was EXPLICITLY provided (image / named).
+  // Otherwise → an abstract on-brand composition, never an invented product.
+  let sceneLine: string;
   if (forRemix) {
-    hero = `Keep the provided product object exactly as it is, placed on the ${heroSide} side with generous negative space`;
+    sceneLine = `On the ${heroSide} side: keep the provided product object exactly as it is, with generous negative space.`;
   } else if (brandLocked) {
-    hero = pickHeroTreatment(hash(seed) >> 5);
+    sceneLine = `On the ${heroSide} side: ${pickHeroTreatment(hash(seed) >> 5)}.`;
+  } else if (hasProduct) {
+    sceneLine = `On the ${heroSide} side: ${product!.trim()} shown large and photorealistic${render ? `, ${render}` : ""}.`;
   } else {
-    hero = `${product ?? "the product"} shown large and photorealistic on the ${heroSide} side${
-      render ? `, ${render}` : ""
-    }`;
+    sceneLine = `A calm, abstract, on-brand composition — soft ${accent} gradient light, gentle geometric shapes and subtle texture, premium and editorial. Do NOT include any product, object, device, person, figure, logo, or mockup.`;
   }
 
   const brandLine = brandLocked
@@ -117,7 +120,7 @@ export function buildBackgroundPrompt(opts: {
     : "Bold, premium, high-contrast.";
 
   return `A clean brand background for a social-media advertisement — NO text of any kind.
-${bg} background with subtle ${accent} accents. On the ${heroSide} side: ${hero}. Keep the ${textSide} side a calm, even ${bg} field with generous negative space for text to be added later.
+${bg} background with subtle ${accent} accents. ${sceneLine} Keep the ${textSide} side a calm, even ${bg} field with generous negative space for text to be added later.
 Render NO text, NO letters, NO words, NO numbers, NO headline, NO captions, NO labels, NO logos, NO UI, and ${NO_FAKE_UI}.
 ${brandLine} Generous negative space, crisp, high quality. Absolutely no text anywhere in the image.`;
 }

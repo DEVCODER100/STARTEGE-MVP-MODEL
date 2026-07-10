@@ -22,6 +22,7 @@ export interface ParsedBrief {
     secondary: string | null;
     palette_name: string | null;
   };
+  product: string | null; // the specific product the user NAMED, or null
   product_position: Position | null;
   render_style: RenderStyle | null;
   background: Background | null;
@@ -35,6 +36,7 @@ export interface ParsedBrief {
 
 export const EMPTY_PARSED: ParsedBrief = {
   colors: { primary: null, secondary: null, palette_name: null },
+  product: null,
   product_position: null,
   render_style: null,
   background: null,
@@ -50,6 +52,7 @@ const SYSTEM = `You are a creative brief parser. Read the user's description of 
 
 {
   "colors": { "primary": "hex or null", "secondary": "hex or null", "palette_name": "string or null" },
+  "product": "the SPECIFIC product the user explicitly named to feature (e.g. 'running shoes', 'a coffee mug', 'the X headset'), or null. Do NOT infer from a brand name; do NOT put a vague category ('gear', 'products', 'software'); only a concrete product the user actually named.",
   "product_position": "left|right|center or null",
   "render_style": "3D|studio_photo|editorial|graphic_poster or null",
   "background": "gradient|solid|scene|texture or null",
@@ -101,6 +104,7 @@ export async function parseDescription(text: string): Promise<ParsedBrief> {
         secondary: hexOrNull(c.secondary),
         palette_name: strOrNull(c.palette_name, 60),
       },
+      product: strOrNull(o.product, 80),
       product_position: oneOf<Position>(o.product_position, ["left", "right", "center"]),
       render_style: oneOf<RenderStyle>(o.render_style, ["3D", "studio_photo", "editorial", "graphic_poster"]),
       background: oneOf<Background>(o.background, ["gradient", "solid", "scene", "texture"]),

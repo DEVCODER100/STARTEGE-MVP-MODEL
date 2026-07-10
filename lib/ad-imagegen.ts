@@ -61,13 +61,20 @@ export async function generateAd(
     ? pickStrategePalette(seedHash(seed))
     : { bg: colors[0], accent: colors[1], text: "" };
 
+  // Hero product ONLY when explicitly provided: exact photo → remix; lookalike
+  // photo → its vision description; text → the product the user named. Never the
+  // stored brand.product (that's a category → would hallucinate a hero).
+  const heroSubject = isExact
+    ? undefined
+    : brief.productDescription?.trim() || brief.productName?.trim() || undefined;
+
   const r = await renderFullCanvasAd({
     copy: brief.copy,
     seed,
     side: lever.side,
     brandLocked: stratege,
     palette,
-    product: brief.productName ?? "the product",
+    product: heroSubject,
     render: lever.render,
     photoUrl: isExact ? brief.photoUrl : undefined,
   });
@@ -124,13 +131,20 @@ export async function generateFromDescription(
     ? pickStrategePalette(seedHash(seed))
     : { bg: merged.colors[0], accent: merged.colors[1], text: "" };
 
+  // Hero product ONLY when explicitly provided: exact photo → remix; lookalike
+  // photo → its vision description; else the product the user NAMED in the
+  // description (parsed.product). Never the stored brand.product category.
+  const heroSubject = isExact
+    ? undefined
+    : opts.productDescription?.trim() || parsed.product?.trim() || undefined;
+
   const r = await renderFullCanvasAd({
     copy,
     seed,
     side: merged.side,
     brandLocked: stratege,
     palette,
-    product: opts.productDescription || product,
+    product: heroSubject,
     render: merged.render,
     photoUrl: isExact ? opts.photoUrl : undefined,
   });
