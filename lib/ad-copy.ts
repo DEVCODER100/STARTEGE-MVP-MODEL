@@ -71,6 +71,34 @@ export async function describeScreenshot(screenshotDataUri: string): Promise<str
   }
 }
 
+const STYLE_REF_SYSTEM = `This image is a STYLE REFERENCE for an ad (it will never appear in the output).
+Describe in 25 words MAX, one line, no preamble: the dominant colors (as hex approximations), the lighting style, and the overall mood. Output the description only.`;
+
+// Vision hints from a reference_style upload — palette/mood ONLY; the image
+// itself is never composited into the output.
+export async function describeStyleReference(dataUri: string): Promise<string> {
+  try {
+    const r = await chat({
+      model: "sonnet",
+      system: STYLE_REF_SYSTEM,
+      temperature: 0.2,
+      maxTokens: 100,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Describe this style reference." },
+            { type: "image_url", image_url: { url: dataUri } },
+          ],
+        },
+      ],
+    });
+    return r.text.trim().slice(0, 200);
+  } catch {
+    return "";
+  }
+}
+
 export async function describeProduct(
   photoDataUri: string
 ): Promise<string> {

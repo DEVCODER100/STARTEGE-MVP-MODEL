@@ -1,6 +1,13 @@
 import { resolveBrandColor } from "./creative-direction";
 import { PALETTES, type AdLever, type ColorCombo } from "./ad-brief";
-import { pickHeroTreatment, NO_FAKE_UI, NO_PRODUCTS, BANNED_COLORS } from "./prompt-constants";
+import {
+  pickHeroTreatment,
+  NO_FAKE_UI,
+  NO_PRODUCTS,
+  BANNED_COLORS,
+  moodBackground,
+  renderOnly,
+} from "./prompt-constants";
 
 // Prompt building for the image engine. Ideogram renders ONLY text-free
 // backgrounds; ALL ad text is drawn deterministically by Sharp
@@ -97,31 +104,37 @@ export function buildBackgroundPrompt(opts: {
   product?: string;
   render?: string;
   forRemix?: boolean;
+  mood?: string | null;
 }): string {
-  const { bg, accent, textSide, seed, brandLocked, product, render, forRemix } = opts;
+  const { bg, accent, textSide, seed, brandLocked, product, render, forRemix, mood } = opts;
   const heroSide = textSide === "left" ? "right" : "left";
   const hasProduct = !!(product && product.trim());
+  // Cinematic abstract vocabulary: richness is always allowed — the ban is on
+  // OBJECTS, never on light, gradient, texture, or depth.
+  const atmosphere = moodBackground(mood);
 
   // Only render a product when one was EXPLICITLY provided (image / named).
   // Otherwise → an abstract on-brand composition, never an invented product.
   let sceneLine: string;
   if (forRemix) {
-    sceneLine = `On the ${heroSide} side: keep the provided product object exactly as it is, with generous negative space.`;
+    sceneLine = `On the ${heroSide} side: keep the provided product object exactly as it is, with generous negative space. Behind it, ${atmosphere} in ${bg} and ${accent}.`;
   } else if (brandLocked) {
     sceneLine = `On the ${heroSide} side: ${pickHeroTreatment(hash(seed) >> 5)}.`;
   } else if (hasProduct) {
-    sceneLine = `On the ${heroSide} side: ${product!.trim()} shown large and photorealistic${render ? `, ${render}` : ""}.`;
+    sceneLine = `On the ${heroSide} side: ${product!.trim()} shown large and photorealistic${
+      render ? `, ${render}` : ""
+    }. ${renderOnly(product!.trim())} Behind it, ${atmosphere} in ${bg} and ${accent}.`;
   } else {
-    sceneLine = `A calm, abstract, on-brand composition — soft ${accent} gradient light, gentle geometric shapes and subtle texture, premium and editorial. ${NO_PRODUCTS}`;
+    sceneLine = `An abstract, on-brand composition: ${atmosphere}, in ${bg} and ${accent}, premium and editorial. ${NO_PRODUCTS}`;
   }
 
   const brandLine = brandLocked
     ? `Warm, editorial, founder-personal — Stratège brand. Absolutely ${BANNED_COLORS}.`
-    : "Bold, premium, high-contrast.";
+    : "Bold, premium, high-contrast, cinematic.";
 
-  return `A clean brand background for a social-media advertisement — NO text of any kind.
-${bg} background with subtle ${accent} accents. ${sceneLine} Keep the ${textSide} side a calm, even ${bg} field with generous negative space for text to be added later.
+  return `A cinematic brand background for a social-media advertisement — NO text of any kind.
+${bg} background with ${accent} accents. ${sceneLine} Keep the ${textSide} side calmer, with generous negative space for text to be added later.
 Render NO text, NO letters, NO words, NO numbers, NO headline, NO captions, NO labels, NO logos, NO UI, and ${NO_FAKE_UI}.
-${brandLine} Generous negative space, crisp, high quality. Absolutely no text anywhere in the image.`;
+${brandLine} Crisp, high quality. Absolutely no text anywhere in the image.`;
 }
 

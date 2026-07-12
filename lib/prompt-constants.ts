@@ -24,7 +24,37 @@ export const NO_FAKE_UI =
 // was uploaded and no product was named — the engine must NEVER invent a hero
 // product (never infer one from the brand name).
 export const NO_PRODUCTS =
-  "Do NOT depict any product, device, gadget, object, item, person, figure, logo, or mockup — an abstract background only. Never infer a product from the brand name.";
+  "Do NOT depict any product, device, gadget, object, item, person, hand, figure, logo, or mockup — an abstract background only. Never infer a product from the brand name.";
+
+// Named-product rule: render exactly what was asked for, nothing else.
+export function renderOnly(name: string): string {
+  return `Render only: ${name}. No additional products or objects.`;
+}
+
+// ─── Cinematic abstract vocabulary (mood → background style) ─────────────────
+// The no-product fix must ban OBJECTS, not visual richness. These map the
+// brief's mood to a cinematic background treatment. Light, gradient, texture
+// and depth are always allowed; products/objects/text/fake-UI never are.
+export const MOOD_BACKGROUNDS: Record<string, string> = {
+  energetic:
+    "a saturated two-tone gradient sweeping across the frame, dramatic light rays and a soft burst glow, high contrast, kinetic depth",
+  premium:
+    "a deep dark field with a single dramatic spotlight falling from above, smooth falloff, subtle vignette, quiet luxurious depth",
+  minimal:
+    "a soft single-hue gradient with generous negative space, faint film grain, calm and airy, barely-there depth",
+  warm:
+    "warm cream and earth tones with a soft window-light glow, gentle organic texture, cozy cinematic atmosphere",
+  bold:
+    "a hard diagonal color split, strong geometric light shapes and a crisp cast shadow, punchy contrast, editorial drama",
+};
+
+// Rich default when no mood was chosen — cinematic, never flat.
+export const DEFAULT_BACKGROUND_STYLE =
+  "a smooth cinematic two-tone gradient with a gentle spotlight glow, subtle texture and atmospheric depth";
+
+export function moodBackground(mood?: string | null): string {
+  return (mood && MOOD_BACKGROUNDS[mood]) || DEFAULT_BACKGROUND_STYLE;
+}
 
 // Headline length per layout.
 export const HEADLINE_SPLIT = "2-3 words, single line, no word over 10 chars";

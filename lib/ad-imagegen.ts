@@ -107,6 +107,15 @@ export interface DescribeOptions {
   photoUrl?: string; // optional uploaded product photo
   mode?: AdMode; // exact | lookalike (only meaningful with a photo)
   productDescription?: string; // optional vision description for lookalike
+  // ── ResolvedBrief overrides (the interpretation layer, when present) ──
+  brief?: {
+    productSource?: "uploaded" | "named" | "none";
+    productName?: string;
+    productPhotoUrl?: string; // role=product_photo → Sharp-composited hero
+    logoUrl?: string; // role=logo → Sharp places it, never sent to Ideogram
+    mood?: string;
+    copy?: Partial<AdCopy>;
+  };
 }
 
 export async function generateFromDescription(
@@ -116,14 +125,26 @@ export async function generateFromDescription(
 ): Promise<GeneratedAd> {
   const parsed = await parseDescription(opts.description);
   const merged = mergeWithDefaults(parsed, brand, seed);
+  const brief = opts.brief;
 
   const product = String(brand.product ?? "the product").slice(0, 120);
-  const written = await writeAdCopy({ product, description: opts.description, brand });
-  const copy: AdCopy = {
-    headline: merged.headline_text || written.headline,
-    subhead: written.subhead,
-    cta: written.cta,
-  };
+  // Copy: the interpreted brief wins; otherwise auto-write.
+  let copy: AdCopy;
+  if (brief?.copy?.headline && brief.copy.cta) {
+    copy = {
+      headline: brief.copy.headline,
+      subhead: brief.copy.subhead ?? "",
+      cta: brief.copy.cta,
+      bullets: brief.copy.bullets,
+    };
+  } else {
+    const written = await writeAdCopy({ product, description: opts.description, brand });
+    copy = {
+      headline: merged.headline_text || written.headline,
+      subhead: written.subhead,
+      cta: written.cta,
+    };
+  }
 
   const isExact = !!opts.photoUrl && opts.mode === "exact";
   const stratege = isStrategeBrand(brand);
@@ -131,12 +152,19 @@ export async function generateFromDescription(
     ? pickStrategePalette(seedHash(seed))
     : { bg: merged.colors[0], accent: merged.colors[1], text: "" };
 
-  // Hero product ONLY when explicitly provided: exact photo → remix; lookalike
-  // photo → its vision description; else the product the user NAMED in the
-  // description (parsed.product). Never the stored brand.product category.
-  const heroSubject = isExact
-    ? undefined
-    : opts.productDescription?.trim() || parsed.product?.trim() || undefined;
+  // Hero product ONLY when explicitly provided. Brief contract first:
+  //   uploaded → Sharp composites the photo (abstract bg only, no hero prompt);
+  //   named    → render exactly that; none → abstract, never invent.
+  // Legacy (no brief): exact photo → remix; lookalike → vision description;
+  // else the product NAMED in the description text. Never brand.product.
+  let heroSubject: string | undefined;
+  if (brief?.productSource === "none" || brief?.productSource === "uploaded") {
+    heroSubject = undefined;
+  } else if (brief?.productSource === "named") {
+    heroSubject = brief.productName?.trim() || undefined;
+  } else if (!isExact) {
+    heroSubject = opts.productDescription?.trim() || parsed.product?.trim() || undefined;
+  }
 
   const r = await renderFullCanvasAd({
     copy,
@@ -147,6 +175,9 @@ export async function generateFromDescription(
     product: heroSubject,
     render: merged.render,
     photoUrl: isExact ? opts.photoUrl : undefined,
+    mood: brief?.mood ?? merged.mood,
+    productPhotoUrl: brief?.productPhotoUrl,
+    logoUrl: brief?.logoUrl,
   });
 
   return {
@@ -166,6 +197,8 @@ export async function generateFromDescription(
         colors: stratege ? "brand-locked" : merged.colors,
         side: merged.side,
         render: merged.render,
+        mood: brief?.mood ?? merged.mood,
+        briefProduct: brief?.productSource ?? "(legacy)",
       },
     },
   };
@@ -289,8 +322,9 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
 }
 
 // Full-canvas ad (any brand): Ideogram renders a TEXT-FREE background — a hero
-// scene (Stratège), the product (user), or a remix of the real product photo —
-// then Sharp draws the copy inside the 5% safe zone. One path for all brands.
+// scene (Stratège), a NAMED product (user), an abstract mood field, or a remix
+// of the real product photo — then Sharp composites the uploaded product photo
+// (if any), the logo (if any), and the copy inside the 5% safe zone.
 async function renderFullCanvasAd(opts: {
   copy: AdCopy;
   seed: string;
@@ -299,9 +333,12 @@ async function renderFullCanvasAd(opts: {
   palette: { bg: string; accent: string; text: string };
   product?: string;
   render?: string;
-  photoUrl?: string; // present → remix (keep the real product)
+  photoUrl?: string; // present → remix (keep the real product) — legacy exact mode
+  mood?: string | null;
+  productPhotoUrl?: string; // brief role=product_photo → Sharp-composited hero
+  logoUrl?: string; // brief role=logo → Sharp places it bottom corner
 }): Promise<{ url: string; fallback: boolean; prompt: string }> {
-  const { copy, seed, side, brandLocked, palette, product, render, photoUrl } = opts;
+  const { copy, seed, side, brandLocked, palette, product, render, photoUrl, mood, productPhotoUrl, logoUrl } = opts;
   const textSide: "left" | "right" = side === "left" ? "left" : "right";
   const forRemix = !!photoUrl;
 
@@ -311,9 +348,11 @@ async function renderFullCanvasAd(opts: {
     textSide,
     seed,
     brandLocked,
-    product,
+    // A Sharp-composited product photo means the BACKGROUND must stay abstract.
+    product: productPhotoUrl ? undefined : product,
     render,
     forRemix,
+    mood,
   });
   logPromptConsole(prompt);
 
@@ -330,15 +369,52 @@ async function renderFullCanvasAd(opts: {
     result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
   }
 
-  const bg = await sharp(await loadImageBuffer(result.urls[0]))
+  let bg = await sharp(await loadImageBuffer(result.urls[0]))
     .resize(AD_SIZE, AD_SIZE, { fit: "cover" })
     .toBuffer();
+
+  // Composite an uploaded product photo as the hero (floating treatment:
+  // rounded corners + soft shadow), centred in the hero half.
+  if (productPhotoUrl) {
+    try {
+      const photoBuf = await loadImageBuffer(productPhotoUrl);
+      const framed = await compositeScreenshotInFrame(photoBuf, "floating");
+      const half = AD_SIZE / 2;
+      const isPortrait = framed.height > framed.width;
+      const boxW = (isPortrait ? 0.38 : 0.44) * AD_SIZE;
+      const boxH = (isPortrait ? 0.76 : 0.62) * AD_SIZE;
+      const scale = Math.min(boxW / framed.width, boxH / framed.height);
+      const drawW = Math.round(framed.width * scale);
+      const drawH = Math.round(framed.height * scale);
+      const resized = await sharp(framed.buffer).resize(drawW, drawH).toBuffer();
+      const left =
+        textSide === "left"
+          ? Math.round(half + (half - drawW) / 2)
+          : Math.round((half - drawW) / 2);
+      const top = Math.round((AD_SIZE - drawH) / 2);
+      bg = await sharp(bg).composite([{ input: resized, left, top }]).jpeg({ quality: 95 }).toBuffer();
+    } catch {
+      /* photo compositing is best-effort — the ad still works without it */
+    }
+  }
+
+  // Logo: loaded here (fs/network), drawn by the text overlay — never Ideogram.
+  let logoBuf: Buffer | undefined;
+  if (logoUrl) {
+    try {
+      logoBuf = await loadImageBuffer(logoUrl);
+    } catch {
+      /* optional */
+    }
+  }
+
   const final = await drawSplitAdText(bg, {
     textSide,
     headline: copy.headline,
     subhead: copy.subhead,
     cta: copy.cta,
     palette,
+    logo: logoBuf,
   });
   const url = await storeImage(final, "jpg");
   await logPromptFile(prompt, url);

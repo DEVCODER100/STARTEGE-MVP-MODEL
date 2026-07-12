@@ -29,6 +29,7 @@ export interface SplitTextOptions {
   subhead: string;
   cta?: string;
   palette: SplitTextPalette;
+  logo?: Buffer; // brand logo image — drawn small under the CTA, never by Ideogram
 }
 
 // True if the hex color is light (→ use dark text on it).
@@ -115,12 +116,15 @@ export async function drawSplitAdText(image: Buffer, opts: SplitTextOptions): Pr
   const gapSC = Math.round(W * 0.032);
   const cta = opts.cta?.trim();
   const ctaH = Math.round(ctaSize * 2.4);
+  const logoH = opts.logo ? Math.round(H * 0.055) : 0;
+  const gapCL = opts.logo ? Math.round(W * 0.03) : 0;
 
   const blockH =
     hLines.length * hLineH +
     gapHS +
     sLines.length * sLineH +
-    (cta ? gapSC + ctaH : 0);
+    (cta ? gapSC + ctaH : 0) +
+    (opts.logo ? gapCL + logoH : 0);
 
   let top = Math.max(safe, Math.round((H - blockH) / 2));
 
@@ -165,6 +169,20 @@ export async function drawSplitAdText(image: Buffer, opts: SplitTextOptions): Pr
     ctx.textBaseline = "middle";
     ctx.fillText(cta, colX + padX, top + Math.round(ctaH / 2) + 1);
     ctx.textBaseline = "top";
+    top += ctaH;
+  }
+
+  // Brand logo — small, under the CTA, inside the safe zone. Sharp/canvas only.
+  if (opts.logo) {
+    try {
+      const logoImg = await loadImage(opts.logo);
+      const scale = logoH / logoImg.height;
+      const logoW = Math.min(colW, Math.round(logoImg.width * scale));
+      top += gapCL;
+      ctx.drawImage(logoImg, colX, top, logoW, logoH);
+    } catch {
+      /* logo drawing is best-effort */
+    }
   }
 
   return canvas.toBuffer("image/jpeg", 92);

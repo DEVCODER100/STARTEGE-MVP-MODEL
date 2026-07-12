@@ -12,8 +12,38 @@ import {
 import { nearestFestival } from "@/lib/festivals";
 import type { FrameType } from "@/lib/device-frames";
 import type { BrandAsset } from "@/lib/brand-assets-types";
+import {
+  IMAGE_ROLE_LABELS,
+  type ImageRole,
+  type ResolvedBrief,
+} from "@/lib/resolved-brief";
 
 type Frame = FrameType;
+
+// Roles the user can assign to an uploaded image. "screenshot" keeps the
+// deterministic device-frame path; the other three flow through the
+// interpretation layer (product_photo → Sharp hero, logo → Sharp corner,
+// reference_style → palette/mood hints only, never composited).
+const UPLOAD_ROLES: { id: ImageRole; hint: string }[] = [
+  { id: "screenshot", hint: "App / website in a device frame" },
+  { id: "product_photo", hint: "A physical product shown as the hero" },
+  { id: "logo", hint: "Your brand mark, placed small under the text" },
+  { id: "reference_style", hint: "Copy its look — colours & mood only" },
+];
+
+// What resolveUpload() hands back: either a device-frame screenshot or a
+// role-tagged image URL for the interpretation layer.
+type Prepared =
+  | { kind: "screenshot"; screenshotUrl: string; frameType: Frame }
+  | { kind: "image"; url: string; role: ImageRole }
+  | null;
+
+interface PendingBrief {
+  summary: string;
+  assumptions: string[];
+  brief: ResolvedBrief;
+  images: { url: string; role: ImageRole }[];
+}
 
 function frameOf(f: string | null | undefined): Frame {
   return f === "laptop" || f === "phone" || f === "browser" ? f : "floating";
@@ -64,7 +94,12 @@ export default function ImageStudioPage() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string | null>(null);
   const [uploadFrame, setUploadFrame] = useState<Frame>("laptop");
+  const [uploadRole, setUploadRole] = useState<ImageRole>("screenshot");
   const [saveToBrand, setSaveToBrand] = useState(true);
+
+  // Interpretation layer: the confirmation moment before any credit is spent.
+  const [interpreting, setInterpreting] = useState(false);
+  const [pendingBrief, setPendingBrief] = useState<PendingBrief | null>(null);
 
   useEffect(() => {
     fetch("/api/brand-assets/list")
@@ -123,16 +158,33 @@ export default function ImageStudioPage() {
       return;
     }
     setError(null);
+    setPendingBrief(null);
     setPendingFile(file);
     setPendingPreview(URL.createObjectURL(file));
     setShowUpload(true);
+    setUploadRole("screenshot"); // sensible default for this box; user can change
     setSelectedAssetId(""); // a fresh upload takes precedence over a saved pick
     if (shotInputRef.current) shotInputRef.current.value = "";
   };
 
-  // Resolve the chosen screenshot (uploaded-new or saved asset) → URL + frame.
-  const resolveScreenshot = async (): Promise<{ screenshotUrl: string; frameType: Frame } | null> => {
+  // Upload a role-tagged image (product_photo / logo / reference_style) → URL.
+  const uploadRoleImage = async (file: File): Promise<string> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: form });
+    const d = await res.json();
+    if (!res.ok || !d.url) throw new Error(d.error || "Image upload failed.");
+    return d.url;
+  };
+
+  // Resolve the chosen upload → either a device-frame screenshot (existing
+  // deterministic path) or a role-tagged image for the interpretation layer.
+  const resolveUpload = async (): Promise<Prepared> => {
     if (showUpload && pendingFile) {
+      if (uploadRole !== "screenshot") {
+        const url = await uploadRoleImage(pendingFile);
+        return { kind: "image", url, role: uploadRole };
+      }
       const form = new FormData();
       form.append("file", pendingFile);
       if (saveToBrand) {
@@ -142,16 +194,17 @@ export default function ImageStudioPage() {
         const d = await res.json();
         if (!res.ok || !d.asset) throw new Error(d.error || "Could not save the asset.");
         setAssets((a) => [d.asset, ...a]);
-        return { screenshotUrl: d.asset.asset_url, frameType: frameOf(d.asset.device_frame_default) };
+        return { kind: "screenshot", screenshotUrl: d.asset.asset_url, frameType: frameOf(d.asset.device_frame_default) };
       }
       const res = await fetch("/api/upload", { method: "POST", body: form });
       const d = await res.json();
       if (!res.ok || !d.url) throw new Error(d.error || "Screenshot upload failed.");
-      return { screenshotUrl: d.url, frameType: uploadFrame };
+      return { kind: "screenshot", screenshotUrl: d.url, frameType: uploadFrame };
     }
     if (selectedAsset) {
       fetch(`/api/brand-assets/${selectedAsset.id}/use`, { method: "POST" }).catch(() => {});
       return {
+        kind: "screenshot",
         screenshotUrl: selectedAsset.asset_url,
         frameType: frameOf(frameOverride || selectedAsset.device_frame_default),
       };
@@ -159,22 +212,15 @@ export default function ImageStudioPage() {
     return null;
   };
 
-  const generate = async () => {
-    if (!text.trim() || busy) return;
+  // POST to the studio route and show the result. Shared by both paths.
+  const runStudio = async (body: Record<string, unknown>) => {
     setBusy(true);
     setError(null);
     try {
-      let shot: { screenshotUrl: string; frameType: Frame } | null = null;
-      try {
-        shot = await resolveScreenshot();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not prepare the screenshot.");
-        return;
-      }
       const res = await fetch("/api/image/studio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: text, ...(shot ?? {}) }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok || !data.url) {
@@ -189,10 +235,79 @@ export default function ImageStudioPage() {
     }
   };
 
+  // Step 1 — read the brief. Screenshots keep the direct device-frame path
+  // (role already unambiguous); everything else goes through the interpretation
+  // layer so the user confirms the plan BEFORE a credit is spent.
+  const startGenerate = async () => {
+    if (!text.trim() || busy || interpreting) return;
+    setError(null);
+    setResult(null);
+
+    let prep: Prepared;
+    try {
+      prep = await resolveUpload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not prepare your upload.");
+      return;
+    }
+
+    if (prep?.kind === "screenshot") {
+      await runStudio({ description: text, screenshotUrl: prep.screenshotUrl, frameType: prep.frameType });
+      return;
+    }
+
+    const images = prep?.kind === "image" ? [{ url: prep.url, role: prep.role }] : [];
+    setInterpreting(true);
+    try {
+      const res = await fetch("/api/brief/interpret", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, images }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.brief) {
+        setError(data.error || "Could not read your brief.");
+        return;
+      }
+      setPendingBrief({
+        summary: data.summary,
+        assumptions: Array.isArray(data.brief.assumptions) ? data.brief.assumptions : [],
+        brief: data.brief,
+        images,
+      });
+    } catch {
+      setError("Could not reach the interpretation service.");
+    } finally {
+      setInterpreting(false);
+    }
+  };
+
+  // Step 2 — the user confirmed the brief. Generate for real.
+  const confirmGenerate = async () => {
+    if (!pendingBrief) return;
+    const b = pendingBrief.brief;
+    await runStudio({
+      description: text,
+      images: pendingBrief.images,
+      brief: {
+        product: { source: b.product.source, name: b.product.name },
+        mood: b.mood,
+        copy: {
+          headline: b.copy.headline,
+          subhead: b.copy.subhead,
+          cta: b.copy.cta,
+          bullets: b.copy.benefits,
+        },
+      },
+    });
+    setPendingBrief(null);
+  };
+
   const clearUpload = () => {
     setShowUpload(false);
     setPendingFile(null);
     setPendingPreview(null);
+    setUploadRole("screenshot");
   };
 
   return (
@@ -205,6 +320,8 @@ export default function ImageStudioPage() {
             setText("");
             setResult(null);
             setError(null);
+            setPendingBrief(null);
+            clearUpload();
           }}
           className="rounded-[9px] border border-strategy px-4 py-1.5 text-sm font-medium text-strategy-deep hover:bg-strategy-tint/40"
         >
@@ -393,26 +510,53 @@ export default function ImageStudioPage() {
                   <div className="mt-3">
                     <div className="flex items-center gap-3">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={pendingPreview} alt="Screenshot" className="h-14 w-20 rounded border border-rule object-cover" />
+                      <img src={pendingPreview} alt="Upload" className="h-14 w-20 rounded border border-rule object-cover" />
                       <button onClick={clearUpload} className="text-xs text-muted underline hover:text-ink">Remove</button>
                     </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      {FRAME_OPTS.map((f) => (
+
+                    {/* What is this? — the role decides how the image is used. */}
+                    <p className="mt-3 text-xs font-medium text-ink">What is this?</p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      {UPLOAD_ROLES.map((r) => (
                         <button
-                          key={f.id}
-                          onClick={() => setUploadFrame(f.id)}
+                          key={r.id}
+                          onClick={() => setUploadRole(r.id)}
+                          title={r.hint}
                           className={`rounded-lg border px-2.5 py-2 text-left text-xs ${
-                            uploadFrame === f.id ? "border-strategy bg-strategy-tint text-strategy-deep" : "border-rule text-ink hover:border-strategy"
+                            uploadRole === r.id ? "border-strategy bg-strategy-tint text-strategy-deep" : "border-rule text-ink hover:border-strategy"
                           }`}
                         >
-                          {f.label}
+                          {IMAGE_ROLE_LABELS[r.id]}
                         </button>
                       ))}
                     </div>
-                    <label className="mt-3 flex items-center gap-2 text-xs text-ink">
-                      <input type="checkbox" checked={saveToBrand} onChange={(e) => setSaveToBrand(e.target.checked)} />
-                      💾 Save to Brand Book for reuse
-                    </label>
+                    <p className="mt-1.5 text-[11px] leading-snug text-muted">
+                      {UPLOAD_ROLES.find((r) => r.id === uploadRole)?.hint}
+                    </p>
+
+                    {/* Device frame + Brand Book save only apply to screenshots. */}
+                    {uploadRole === "screenshot" && (
+                      <>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          {FRAME_OPTS.map((f) => (
+                            <button
+                              key={f.id}
+                              onClick={() => setUploadFrame(f.id)}
+                              className={`rounded-lg border px-2.5 py-2 text-left text-xs ${
+                                uploadFrame === f.id ? "border-strategy bg-strategy-tint text-strategy-deep" : "border-rule text-ink hover:border-strategy"
+                              }`}
+                            >
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+                        <label className="mt-3 flex items-center gap-2 text-xs text-ink">
+                          <input type="checkbox" checked={saveToBrand} onChange={(e) => setSaveToBrand(e.target.checked)} />
+                          💾 Save to Brand Book for reuse
+                        </label>
+                      </>
+                    )}
+
                     {assets.length > 0 && (
                       <button onClick={clearUpload} className="mt-2 text-xs text-muted underline hover:text-ink">
                         ← Use a saved asset instead
@@ -431,21 +575,62 @@ export default function ImageStudioPage() {
 
           {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-          <button
-            onClick={generate}
-            disabled={!text.trim() || busy}
-            className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-strategy text-base font-semibold text-white hover:bg-strategy-deep disabled:opacity-40"
-          >
-            {busy ? (
-              "Generating…"
-            ) : (
-              <>
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                Generate image
-              </>
-            )}
-          </button>
-          <p className="mt-3 text-center text-xs text-muted">Uses 1 credit · 1 image</p>
+          {/* Confirmation moment — the interpreted brief, before any credit is spent. */}
+          {pendingBrief && (
+            <div className="mt-5 rounded-xl border border-strategy bg-strategy-tint/30 p-4">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-strategy-deep">Here&apos;s the plan</span>
+              <p className="mt-1.5 text-[15px] leading-snug text-ink">{pendingBrief.summary}</p>
+              {pendingBrief.assumptions.length > 0 && (
+                <div className="mt-3">
+                  <span className="text-xs font-medium text-muted">I filled in a few gaps:</span>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-ink">
+                    {pendingBrief.assumptions.map((a, i) => (
+                      <li key={i}>{a}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={confirmGenerate}
+                  disabled={busy}
+                  className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-strategy text-sm font-semibold text-white hover:bg-strategy-deep disabled:opacity-40"
+                >
+                  {busy ? "Generating…" : "Looks right — generate"}
+                </button>
+                <button
+                  onClick={() => setPendingBrief(null)}
+                  disabled={busy}
+                  className="h-11 rounded-xl border border-strategy px-4 text-sm font-medium text-strategy-deep hover:bg-strategy-tint/40 disabled:opacity-40"
+                >
+                  Edit
+                </button>
+              </div>
+              <p className="mt-2 text-center text-[11px] text-muted">Nothing is charged until you confirm</p>
+            </div>
+          )}
+
+          {!pendingBrief && (
+            <>
+              <button
+                onClick={startGenerate}
+                disabled={!text.trim() || busy || interpreting}
+                className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-strategy text-base font-semibold text-white hover:bg-strategy-deep disabled:opacity-40"
+              >
+                {interpreting ? (
+                  "Reading your brief…"
+                ) : busy ? (
+                  "Generating…"
+                ) : (
+                  <>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    Generate image
+                  </>
+                )}
+              </button>
+              <p className="mt-3 text-center text-xs text-muted">Uses 1 credit · 1 image</p>
+            </>
+          )}
 
           {result && (
             <div className="mt-6 rounded-2xl border border-rule bg-white p-4">

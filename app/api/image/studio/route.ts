@@ -12,22 +12,56 @@ import { generateFromDescription, generateScreenshotAd } from "@/lib/ad-imagegen
 import { isAllowedImageUrl } from "@/lib/storage";
 import { isAdMode } from "@/lib/ad-brief";
 import { isFrameType } from "@/lib/device-frames";
+import { IMAGE_ROLES, isMood } from "@/lib/resolved-brief";
 import { limits } from "@/lib/security";
 import { logEvent } from "@/lib/events";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Dual-input Image Studio: the textarea (palettes + styles + chips + free text)
-// is the source of truth. Parse → merge with brand defaults → write copy →
-// build prompt → Ideogram (generate, or remix when an exact-product photo is given).
+// Image Studio generation. Preferred input: the interpreted ResolvedBrief
+// (`brief` + `images` with roles). Legacy fields (photoUrl/screenshotUrl/…)
+// remain accepted so older clients keep working. Roles route to existing paths:
+//   product_photo → Sharp-composited hero over an abstract background
+//   screenshot    → device frame + flat brand background
+//   logo          → Sharp places it (never sent to Ideogram)
+//   reference_style → palette/mood hints only (consumed at interpret time)
 const Body = z.object({
   description: z.string().min(1).max(2000),
   photoUrl: z.string().max(2000).optional(),
   mode: z.string().optional(),
   screenshotUrl: z.string().max(2000).optional(),
   frameType: z.string().max(20).optional(),
+  images: z
+    .array(
+      z.object({
+        url: z.string().max(2000),
+        role: z.enum(IMAGE_ROLES as [string, ...string[]]),
+      })
+    )
+    .max(4)
+    .optional(),
+  brief: z
+    .object({
+      product: z
+        .object({
+          source: z.enum(["uploaded", "named", "none"]).optional(),
+          name: z.string().max(120).optional(),
+        })
+        .optional(),
+      mood: z.string().max(20).optional(),
+      copy: z
+        .object({
+          headline: z.string().max(120).optional(),
+          subhead: z.string().max(200).optional(),
+          cta: z.string().max(40).optional(),
+          bullets: z.array(z.string().max(40)).max(3).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 export async function POST(req: Request) {
@@ -46,43 +80,63 @@ export async function POST(req: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
-    const { description } = parsed.data;
-    const photoUrl =
-      parsed.data.photoUrl && isAllowedImageUrl(parsed.data.photoUrl)
-        ? parsed.data.photoUrl
-        : undefined;
-    const mode =
-      parsed.data.mode && isAdMode(parsed.data.mode) ? parsed.data.mode : undefined;
+    const { description, brief } = parsed.data;
 
     if (!(await canGenerateImage(user.id))) {
       await logEvent(user.id, "limit_hit", { limitType: "images" });
-      return NextResponse.json(
-        { error: MVP_LIMIT_MESSAGE, mvpLimit: true },
-        { status: 429 }
-      );
+      return NextResponse.json({ error: MVP_LIMIT_MESSAGE, mvpLimit: true }, { status: 429 });
     }
 
     const sql = getDb();
-    const brandRows = await sql`
-      SELECT * FROM brand_profiles WHERE user_id = ${user.id} LIMIT 1
-    `;
+    const brandRows = await sql`SELECT * FROM brand_profiles WHERE user_id = ${user.id} LIMIT 1`;
     const brand = brandRows[0] ?? {};
 
-    const screenshotUrl =
-      parsed.data.screenshotUrl && isAllowedImageUrl(parsed.data.screenshotUrl)
+    // Resolve uploaded images by role (allowlisted URLs only).
+    const images = (parsed.data.images ?? []).filter((i) => isAllowedImageUrl(i.url));
+    const roleUrl = (role: string) => images.find((i) => i.role === role)?.url;
+    const productPhotoUrl = roleUrl("product_photo");
+    const logoUrl = roleUrl("logo");
+
+    // Legacy fields (older clients).
+    const legacyPhotoUrl =
+      parsed.data.photoUrl && isAllowedImageUrl(parsed.data.photoUrl) ? parsed.data.photoUrl : undefined;
+    const mode = parsed.data.mode && isAdMode(parsed.data.mode) ? parsed.data.mode : undefined;
+    const screenshotUrl = roleUrl("screenshot") ??
+      (parsed.data.screenshotUrl && isAllowedImageUrl(parsed.data.screenshotUrl)
         ? parsed.data.screenshotUrl
-        : undefined;
+        : undefined);
     const frameType = isFrameType(parsed.data.frameType) ? parsed.data.frameType : "floating";
 
     const seed = `${user.id}:${Date.now()}`;
+    const mood = brief?.mood && isMood(brief.mood) ? brief.mood : undefined;
+
     const result = screenshotUrl
       ? await generateScreenshotAd(brand, { description, screenshotUrl, frameType }, seed)
-      : await generateFromDescription(brand, { description, photoUrl, mode }, seed);
+      : await generateFromDescription(
+          brand,
+          {
+            description,
+            photoUrl: legacyPhotoUrl,
+            mode,
+            brief: brief
+              ? {
+                  productSource:
+                    brief.product?.source ?? (productPhotoUrl ? "uploaded" : undefined),
+                  productName: brief.product?.name,
+                  productPhotoUrl,
+                  logoUrl,
+                  mood,
+                  copy: brief.copy,
+                }
+              : productPhotoUrl || logoUrl || mood
+              ? { productPhotoUrl, logoUrl, mood, productSource: productPhotoUrl ? "uploaded" : undefined }
+              : undefined,
+          },
+          seed
+        );
+
     await consumeImage(user.id);
-    await logEvent(user.id, "image_generated", {
-      kind: "studio",
-      fallback: result.fallback,
-    });
+    await logEvent(user.id, "image_generated", { kind: "studio", fallback: result.fallback });
 
     // Save to the Library (best-effort — never fail the request on this).
     try {
@@ -103,8 +157,6 @@ export async function POST(req: Request) {
       debug: result.debug,
     });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e);
   }
 }
