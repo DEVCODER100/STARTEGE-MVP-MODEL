@@ -9,15 +9,21 @@ import { join } from "node:path";
  */
 export async function storeImage(
   buffer: Buffer,
-  ext: "jpg" | "png" = "jpg"
+  ext: "jpg" | "png" | "webp" = "jpg"
 ): Promise<string> {
   const filename = `stratege-${randomUUID()}.${ext}`;
+
+  const CONTENT_TYPES: Record<string, string> = {
+    jpg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+  };
 
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const { put } = await import("@vercel/blob");
     const blob = await put(`images/${filename}`, buffer, {
       access: "public",
-      contentType: ext === "png" ? "image/png" : "image/jpeg",
+      contentType: CONTENT_TYPES[ext] ?? "image/jpeg",
     });
     return blob.url;
   }

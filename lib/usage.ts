@@ -69,6 +69,38 @@ export async function consumePost(userId: string): Promise<number> {
   return rows[0].post_count as number;
 }
 
+/**
+ * Atomically reserve one post generation, enforcing the daily cap in the SAME
+ * statement so concurrent requests can't both pass a separate check (TOCTOU).
+ * Returns { ok: false } when the user is already at the limit — no increment.
+ * Pair with refundPost() if the downstream generation hard-fails.
+ */
+export async function consumePostIfAllowed(
+  userId: string
+): Promise<{ ok: boolean; used: number }> {
+  const sql = getDb();
+  const rows = await sql`
+    INSERT INTO daily_usage (user_id, day, post_count)
+    VALUES (${userId}, ${today()}, 1)
+    ON CONFLICT (user_id, day) DO UPDATE
+      SET post_count = daily_usage.post_count + 1
+      WHERE daily_usage.post_count < ${MVP_LIMITS.posts}
+    RETURNING post_count
+  `;
+  if (rows.length === 0) return { ok: false, used: MVP_LIMITS.posts };
+  return { ok: true, used: rows[0].post_count as number };
+}
+
+// Give back a reserved post slot when a generation fails after reserving.
+export async function refundPost(userId: string): Promise<void> {
+  const sql = getDb();
+  await sql`
+    UPDATE daily_usage
+    SET post_count = GREATEST(0, post_count - 1)
+    WHERE user_id = ${userId} AND day = ${today()}
+  `;
+}
+
 export async function consumeImage(userId: string): Promise<number> {
   const sql = getDb();
   const rows = await sql`

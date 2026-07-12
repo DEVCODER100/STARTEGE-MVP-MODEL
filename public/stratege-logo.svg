@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="64" viewBox="0 0 260 64" fill="none" role="img" aria-label="Stratège">
+  <g transform="translate(4 16)">
+    <path d="M5 15 L16 5 L27 15" stroke="#087A55" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M5 25 L16 15 L27 25" stroke="#087A55" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.38"/>
+  </g>
+  <text x="48" y="41" font-family="Fraunces, 'Playfair Display', Georgia, serif" font-size="30" font-weight="600" fill="#171713">Stratège</text>
+</svg>

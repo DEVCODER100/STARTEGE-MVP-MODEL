@@ -56,6 +56,16 @@ export default function MobileNav() {
     };
   }, [open]);
 
+  // Close on Escape for keyboard users.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const name = session?.user?.name || session?.user?.email?.split("@")[0] || "Founder";
   const initial = name.slice(0, 1).toUpperCase();
 
@@ -99,8 +109,13 @@ export default function MobileNav() {
       {/* Drawer */}
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-[84%] max-w-xs flex-col bg-paper shadow-2xl">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} aria-hidden />
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu"
+            className="absolute inset-y-0 left-0 flex w-[84%] max-w-xs flex-col bg-paper shadow-2xl"
+          >
             <div className="flex h-14 items-center justify-between border-b border-rule px-4">
               <div className="flex items-center gap-2">
                 <LogoMark size={22} />

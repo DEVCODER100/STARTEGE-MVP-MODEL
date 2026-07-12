@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getOrCreateUser } from "@/lib/users";
 import { deleteImage } from "@/lib/storage";
 import { updateAsset, deleteAsset, ASSET_TYPES } from "@/lib/brand-assets";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,8 +28,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
     return NextResponse.json({ asset });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Update failed";
-    return NextResponse.json({ error: msg }, { status: msg === "Unauthenticated" ? 401 : 500 });
+    return errorJson(e, { fallback: "Update failed" });
   }
 }
 
@@ -42,7 +42,6 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
     if (removed.thumbnail_url) await deleteImage(removed.thumbnail_url);
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Delete failed";
-    return NextResponse.json({ error: msg }, { status: msg === "Unauthenticated" ? 401 : 500 });
+    return errorJson(e, { fallback: "Delete failed" });
   }
 }

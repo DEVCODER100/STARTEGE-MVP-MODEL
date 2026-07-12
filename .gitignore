@@ -46,3 +46,7 @@ template/
 
 # Local image-prompt debug logs
 /logs/
+
+# Local caches / scratch (never commit)
+/npm-cache/
+/tmp/

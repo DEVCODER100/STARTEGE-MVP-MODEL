@@ -4,6 +4,7 @@ import { getOrCreateUser } from "@/lib/users";
 import { getDb } from "@/lib/db";
 import { generateImages } from "@/lib/ideogram";
 import { limits } from "@/lib/security";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,8 +54,6 @@ export async function POST(req: Request) {
       reason: result.reason,
     });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e);
   }
 }

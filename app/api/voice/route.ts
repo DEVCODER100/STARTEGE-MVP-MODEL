@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getOrCreateUser } from "@/lib/users";
 import { getDb } from "@/lib/db";
 import { logEvent } from "@/lib/events";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +18,7 @@ export async function GET() {
     `;
     return NextResponse.json({ profile: rows[0] ?? null });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e);
   }
 }
 
@@ -74,8 +73,6 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ profile: rows[0] });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e);
   }
 }

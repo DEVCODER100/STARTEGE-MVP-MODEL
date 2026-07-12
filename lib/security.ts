@@ -87,8 +87,11 @@ export async function logSecurityEvent(
 }
 
 // ─── Rate limiting (in-memory token bucket per user+key) ─────────────────
-// Sufficient for single-instance dev/prod. For multi-instance, swap to
-// Upstash Redis or Vercel KV later.
+// WARNING: this state lives in a single process. On serverless/multi-instance
+// hosts (Vercel) each instance has its own map, so this does NOT enforce a
+// global limit and must NOT be treated as a hard security control. Move to a
+// shared store (Upstash Redis / Vercel KV) with atomic INCR+TTL for real
+// enforcement. Until then this is best-effort per-instance throttling only.
 
 interface Bucket {
   tokens: number;
@@ -98,9 +101,30 @@ interface Bucket {
 }
 
 const BUCKETS = new Map<string, Bucket>();
+const MAX_BUCKETS = 50_000; // hard cap so a flood of distinct ids can't OOM us.
 
 function bucketKey(scope: string, id: string) {
   return `${scope}:${id}`;
+}
+
+// Evict buckets that have fully refilled (idle) — they carry no useful state.
+// Runs opportunistically when the map grows large, keeping memory bounded.
+function evictIfNeeded(now: number) {
+  if (BUCKETS.size < MAX_BUCKETS) return;
+  const stale: string[] = [];
+  BUCKETS.forEach((b, key) => {
+    const elapsed = now - b.lastRefill;
+    if (b.tokens + elapsed * b.refillRatePerMs >= b.capacity) stale.push(key);
+  });
+  stale.forEach((key) => BUCKETS.delete(key));
+  // If still over the cap (all buckets active), drop the oldest entries
+  // (Map preserves insertion order, so the first keys are the oldest).
+  if (BUCKETS.size >= MAX_BUCKETS) {
+    const overflow = BUCKETS.size - Math.floor(MAX_BUCKETS * 0.9);
+    Array.from(BUCKETS.keys())
+      .slice(0, overflow)
+      .forEach((key) => BUCKETS.delete(key));
+  }
 }
 
 /**
@@ -121,6 +145,7 @@ export function rateLimit(
 
   let b = BUCKETS.get(key);
   if (!b) {
+    evictIfNeeded(now);
     b = { tokens: capacity, refillRatePerMs, capacity, lastRefill: now };
     BUCKETS.set(key, b);
   }

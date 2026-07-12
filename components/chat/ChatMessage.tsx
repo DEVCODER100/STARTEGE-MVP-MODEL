@@ -93,7 +93,7 @@ export default function ChatMessage({
       </div>
       <div className="flex-1 min-w-0">
         {pending ? (
-          <div className="flex items-center gap-1.5 py-2">
+          <div className="flex items-center gap-1.5 py-2" role="status" aria-label="Stratège is thinking">
             <span className="w-1.5 h-1.5 rounded-full bg-text-muted animate-pulse" />
             <span
               className="w-1.5 h-1.5 rounded-full bg-text-muted animate-pulse"

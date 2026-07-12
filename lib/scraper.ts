@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
+import { safeFetch } from "./net-guard";
 
 export type ScrapedBrand = {
   url: string;
@@ -91,7 +92,7 @@ function colorsFromCss($: ReturnType<typeof cheerio.load>): string[] {
 /** Dominant vivid color of an image (e.g. the og:image) via pixel sampling. */
 async function dominantColorFromImage(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const res = await safeFetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const img = await loadImage(Buffer.from(await res.arrayBuffer()));
     const N = 48;
@@ -168,8 +169,7 @@ export async function scrapeWebsite(rawUrl: string): Promise<ScrapedBrand> {
 
   let res: Response;
   try {
-    res = await fetch(url, {
-      redirect: "follow",
+    res = await safeFetch(url, {
       headers: {
         // Some sites block bot-looking requests. This intentionally looks like
         // a normal browser navigation, not an API client.

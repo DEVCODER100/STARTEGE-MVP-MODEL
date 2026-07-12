@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/users";
 import { getDb } from "@/lib/db";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,8 +18,6 @@ export async function GET() {
     `;
     return NextResponse.json({ campaigns: rows });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e);
   }
 }

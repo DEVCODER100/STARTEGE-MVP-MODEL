@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/users";
 import { recordUse } from "@/lib/brand-assets";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,6 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     await recordUse(user.id, params.id);
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Failed";
-    return NextResponse.json({ error: msg }, { status: msg === "Unauthenticated" ? 401 : 500 });
+    return errorJson(e);
   }
 }

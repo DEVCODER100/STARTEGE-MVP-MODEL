@@ -7,6 +7,7 @@ import { chat } from "@/lib/claude";
 import { generateImages } from "@/lib/ideogram";
 import { SAFE_ZONE_RULE } from "@/lib/prompt-constants";
 import { limits } from "@/lib/security";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -181,7 +182,10 @@ export async function POST(req: Request) {
             VALUES (${user.id}, ${creditsUsed}, 'refund', 'Auto-refund: generation failed')
           `;
         }
-        return NextResponse.json({ error: msg }, { status: 502 });
+        return NextResponse.json(
+          { error: "Generation failed. Please try again." },
+          { status: 502 }
+        );
       }
     }
 
@@ -217,9 +221,7 @@ export async function POST(req: Request) {
       imageFallback: imgs.fallback,
     });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e);
   }
 }
 

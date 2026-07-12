@@ -6,6 +6,7 @@ import { canGenerateImage, consumeImage, getUsage, MVP_LIMIT_MESSAGE } from "@/l
 import { editAd, type AdImageMeta } from "@/lib/ad-imagegen";
 import { isColorCombo, type AdCopy } from "@/lib/ad-brief";
 import { logEvent } from "@/lib/events";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,8 +97,6 @@ export async function POST(req: Request) {
     const usage = await getUsage(user.id);
     return NextResponse.json({ url: result.url, copy: result.copy, usage });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e);
   }
 }

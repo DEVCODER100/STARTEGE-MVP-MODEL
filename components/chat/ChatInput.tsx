@@ -60,8 +60,17 @@ export default function ChatInput({
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadError(null);
+    // Match what the server accepts so users get an instant, clear message
+    // instead of a rejected upload round-trip.
+    const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+    if (file.type && !ALLOWED.includes(file.type)) {
+      setUploadError("Use a JPG, PNG, or WebP image.");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     if (file.size > 8 * 1024 * 1024) {
       setUploadError("Image too large (max 8 MB).");
+      if (fileRef.current) fileRef.current.value = "";
       return;
     }
     setUploading(true);
@@ -145,6 +154,8 @@ export default function ChatInput({
         <button
           type="button"
           onClick={send}
+          aria-label="Send message"
+          title="Send"
           disabled={(!text.trim() && !photoUrl) || disabled || uploading}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-strategy text-white hover:bg-strategy-deep disabled:opacity-40"
         >

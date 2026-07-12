@@ -12,6 +12,7 @@ import {
   MVP_LIMIT_MESSAGE,
 } from "@/lib/usage";
 import { logEvent } from "@/lib/events";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -105,8 +106,6 @@ MOOD: focused, credible, indie-hacker.`;
       usage,
     });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e);
   }
 }

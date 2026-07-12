@@ -41,7 +41,11 @@ function Field({
 export default function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
-  const next = search.get("next") || "/dashboard";
+  // Only accept same-origin relative paths — never "//evil.com" or absolute
+  // URLs — so `next` can't be used as an open redirect.
+  const rawNext = search.get("next") || "/dashboard";
+  const next =
+    rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard";
   const hasGoogle = !!process.env.NEXT_PUBLIC_GOOGLE_ENABLED;
 
   const [email, setEmail] = useState("");

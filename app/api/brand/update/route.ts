@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getOrCreateUser } from "@/lib/users";
 import { getDb } from "@/lib/db";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,22 +54,20 @@ export async function POST(req: Request) {
       ON CONFLICT (user_id) DO NOTHING
     `;
 
-    // Column names are whitelisted by Zod; values are parameterized.
-    for (const k of keys) {
-      const v = data[k];
-      await sql.query(
-        `UPDATE brand_profiles SET ${k} = $1 WHERE user_id = $2`,
-        [v, user.id]
-      );
-    }
+    // Column names are whitelisted by Zod; values are parameterized. One
+    // atomic UPDATE instead of N round-trips (no partial-update window).
+    const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
+    const values = keys.map((k) => data[k]);
+    await sql.query(
+      `UPDATE brand_profiles SET ${setClause} WHERE user_id = $${keys.length + 1}`,
+      [...values, user.id]
+    );
 
     const rows = await sql`
       SELECT * FROM brand_profiles WHERE user_id = ${user.id} LIMIT 1
     `;
     return NextResponse.json({ profile: rows[0] });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e);
   }
 }

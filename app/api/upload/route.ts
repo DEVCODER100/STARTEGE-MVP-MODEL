@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/users";
 import { storeImage } from "@/lib/storage";
 import { limits } from "@/lib/security";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,7 +11,7 @@ export const maxDuration = 30;
 const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 
 // Sniff the magic bytes so we trust the actual content, not the client header.
-function sniffImage(buf: Buffer): "jpg" | "png" | null {
+function sniffImage(buf: Buffer): "jpg" | "png" | "webp" | null {
   if (buf.length < 12) return null;
   // JPEG: FF D8 FF
   if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpg";
@@ -22,8 +23,7 @@ function sniffImage(buf: Buffer): "jpg" | "png" | null {
     buf[3] === 0x47
   )
     return "png";
-  // WebP: "RIFF"...."WEBP" → re-encode to jpg via the jpg path is overkill;
-  // accept it as-is is not supported by sniff→ext map, so treat as png-safe.
+  // WebP: "RIFF"...."WEBP"
   if (
     buf[0] === 0x52 &&
     buf[1] === 0x49 &&
@@ -34,7 +34,7 @@ function sniffImage(buf: Buffer): "jpg" | "png" | null {
     buf[10] === 0x42 &&
     buf[11] === 0x50
   )
-    return "png";
+    return "webp";
   return null;
 }
 
@@ -74,8 +74,6 @@ export async function POST(req: Request) {
     const url = await storeImage(buf, ext);
     return NextResponse.json({ url });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Upload failed";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e, { fallback: "Upload failed" });
   }
 }

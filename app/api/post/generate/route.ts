@@ -5,8 +5,14 @@ import { getDb } from "@/lib/db";
 import { chat } from "@/lib/claude";
 import { buildShipPrompt, ThreeAngles } from "@/lib/prompts-v2";
 import { inspect, limits, logSecurityEvent } from "@/lib/security";
-import { canGeneratePost, consumePost, getUsage, MVP_LIMIT_MESSAGE } from "@/lib/usage";
+import {
+  consumePostIfAllowed,
+  refundPost,
+  getUsage,
+  MVP_LIMIT_MESSAGE,
+} from "@/lib/usage";
 import { logEvent } from "@/lib/events";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,9 +89,23 @@ export async function POST(req: Request) {
 
     // MVP daily limit — only full generations count (regenerate is free).
     const isFullGeneration = !only;
+
+    // Jailbreak inspect (before reserving a slot, so a blocked attempt is free).
+    const check = inspect(input);
+    if (check.isAttempt) {
+      await logSecurityEvent(user.id, input, check.reason ?? "unknown");
+      return NextResponse.json(
+        { error: "I can only help you turn your work into posts." },
+        { status: 400 }
+      );
+    }
+    const safeInput = check.sanitized || input;
+
+    // Atomically reserve one generation, enforcing the cap in a single write so
+    // concurrent requests can't both slip past a separate check (TOCTOU).
     if (isFullGeneration) {
-      const allowed = await canGeneratePost(user.id);
-      if (!allowed) {
+      const reserved = await consumePostIfAllowed(user.id);
+      if (!reserved.ok) {
         const usage = await getUsage(user.id);
         await logEvent(user.id, "limit_hit", { limitType: "posts" });
         return NextResponse.json(
@@ -99,17 +119,6 @@ export async function POST(req: Request) {
         );
       }
     }
-
-    // Jailbreak inspect
-    const check = inspect(input);
-    if (check.isAttempt) {
-      await logSecurityEvent(user.id, input, check.reason ?? "unknown");
-      return NextResponse.json(
-        { error: "I can only help you turn your work into posts." },
-        { status: 400 }
-      );
-    }
-    const safeInput = check.sanitized || input;
 
     // Fetch voice profile (or use empty defaults so the flow works pre-onboarding)
     const sql = getDb();
@@ -145,7 +154,12 @@ export async function POST(req: Request) {
         angles = demoAngles(safeInput);
         fallback = true;
       } else {
-        return NextResponse.json({ error: msg }, { status: 502 });
+        // Generation failed for real — give back the reserved slot.
+        if (isFullGeneration) await refundPost(user.id);
+        return NextResponse.json(
+          { error: "Generation failed. Please try again." },
+          { status: 502 }
+        );
       }
     }
 
@@ -185,9 +199,8 @@ export async function POST(req: Request) {
       saved = inserted[0];
     }
 
-    // Count this generation against the MVP daily limit (full gen only).
+    // Slot was already reserved atomically above (full gen only).
     if (isFullGeneration) {
-      await consumePost(user.id);
       await logEvent(user.id, "post_generated", {
         postId: saved?.id,
         inputLength: safeInput.length,
@@ -209,8 +222,6 @@ export async function POST(req: Request) {
       usage,
     });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e);
   }
 }

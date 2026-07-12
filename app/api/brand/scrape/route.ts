@@ -25,8 +25,13 @@ export async function POST(req: Request) {
     const data = await scrapeWebsite(parsed.data.url);
     return NextResponse.json({ ok: true, data });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Scrape failed";
-    const status = msg === "Unauthenticated" ? 401 : 200;
-    return NextResponse.json({ ok: false, error: msg }, { status });
+    if (e instanceof Error && e.message === "Unauthenticated") {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+    console.error("[api-error] brand/scrape", e);
+    return NextResponse.json(
+      { ok: false, error: "Couldn't read that website." },
+      { status: 200 }
+    );
   }
 }

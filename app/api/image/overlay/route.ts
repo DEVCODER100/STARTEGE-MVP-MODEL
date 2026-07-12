@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getOrCreateUser } from "@/lib/users";
 import { getDb } from "@/lib/db";
 import { reoverlayImage } from "@/lib/imagegen";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,8 +67,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url, headline: headline.trim(), cta: cta.trim() });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e);
   }
 }

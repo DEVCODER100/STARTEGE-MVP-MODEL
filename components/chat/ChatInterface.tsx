@@ -79,7 +79,14 @@ export default function ChatInterface({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={scrollRef} className={desk ? "flex-1 overflow-y-auto p-4" : "flex-1 overflow-y-auto px-6 py-8"}>
+      <div
+        ref={scrollRef}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-label="Conversation"
+        className={desk ? "flex-1 overflow-y-auto p-4" : "flex-1 overflow-y-auto px-6 py-8"}
+      >
         <div className={desk ? "space-y-4" : "mx-auto max-w-[720px] space-y-5"}>
           {fallback && (
             <div className="rounded-card border border-accent/30 bg-accent-tint px-3 py-2 text-xs text-accent">

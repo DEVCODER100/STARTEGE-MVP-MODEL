@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/users";
 import { listAssets, effectiveAssetLimit } from "@/lib/brand-assets";
+import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,8 +13,6 @@ export async function GET() {
     const limit = effectiveAssetLimit(String((user as { plan?: string }).plan ?? "free"));
     return NextResponse.json({ assets, limit });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Failed to load assets";
-    const status = msg === "Unauthenticated" ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return errorJson(e, { fallback: "Failed to load assets" });
   }
 }
