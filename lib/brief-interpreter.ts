@@ -10,6 +10,7 @@ import {
   isPlatform,
   stripChecks,
 } from "./resolved-brief";
+import { pickArchetype, isCopyHeavy } from "./layout-archetypes";
 
 // The interpretation layer. One Claude call converts the founder's messy raw
 // request + upload roles into a structured ResolvedBrief BEFORE any prompt is
@@ -90,6 +91,16 @@ function finalize(
     .filter((c) => /^#?[0-9a-fA-F]{3,8}$/.test(c))
     .slice(0, 5);
 
+  const benefits = draft.copy.benefits?.map((b) => stripChecks(b)).filter(Boolean).slice(0, 3);
+
+  // Provisional, deterministic archetype so the confirmation card names a stable
+  // style without a DB read. The route's repeat guard may re-roll before render.
+  const archetype = pickArchetype(
+    `${String(input.brand.brand_name ?? "")}:${draft.mood}:${draft.platform}`,
+    draft.mood,
+    { copyHeavy: isCopyHeavy({ benefits, price: draft.copy.price }) }
+  );
+
   return {
     brand: {
       name: String(input.brand.brand_name ?? "your brand").slice(0, 120),
@@ -101,7 +112,7 @@ function finalize(
     copy: {
       headline: draft.copy.headline,
       subhead: draft.copy.subhead,
-      benefits: draft.copy.benefits?.map((b) => stripChecks(b)).filter(Boolean).slice(0, 3),
+      benefits,
       cta: draft.copy.cta,
       price: draft.copy.price,
       discount: draft.copy.discount,
@@ -109,6 +120,7 @@ function finalize(
     mood: draft.mood,
     platform: draft.platform,
     aspectRatio: PLATFORM_ASPECT[draft.platform],
+    archetype,
     assumptions: draft.assumptions.slice(0, 8),
   };
 }

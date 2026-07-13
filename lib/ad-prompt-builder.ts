@@ -7,6 +7,7 @@ import {
   BANNED_COLORS,
   moodBackground,
   renderOnly,
+  fnv1a,
 } from "./prompt-constants";
 
 // Prompt building for the image engine. Ideogram renders ONLY text-free
@@ -28,18 +29,8 @@ const FONTS = [
 ];
 const BGS = ["clean gradient", "soft radial gradient", "smooth diagonal gradient"];
 
-// Small, dependency-free string hash → stable integer for lever rotation.
-function hash(seed: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return Math.abs(h);
-}
-
 export function pickLever(seed: string): AdLever {
-  const h = hash(seed);
+  const h = fnv1a(seed);
   return {
     side: SIDES[h % SIDES.length],
     render: RENDERS[(h >> 3) % RENDERS.length],
@@ -119,7 +110,7 @@ export function buildBackgroundPrompt(opts: {
   if (forRemix) {
     sceneLine = `On the ${heroSide} side: keep the provided product object exactly as it is, with generous negative space. Behind it, ${atmosphere} in ${bg} and ${accent}.`;
   } else if (brandLocked) {
-    sceneLine = `On the ${heroSide} side: ${pickHeroTreatment(hash(seed) >> 5)}.`;
+    sceneLine = `On the ${heroSide} side: ${pickHeroTreatment(fnv1a(seed) >> 5)}.`;
   } else if (hasProduct) {
     sceneLine = `On the ${heroSide} side: ${product!.trim()} shown large and photorealistic${
       render ? `, ${render}` : ""

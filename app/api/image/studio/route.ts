@@ -12,7 +12,8 @@ import { generateFromDescription, generateScreenshotAd } from "@/lib/ad-imagegen
 import { isAllowedImageUrl } from "@/lib/storage";
 import { isAdMode } from "@/lib/ad-brief";
 import { isFrameType } from "@/lib/device-frames";
-import { IMAGE_ROLES, isMood } from "@/lib/resolved-brief";
+import { IMAGE_ROLES, isMood, isArchetype } from "@/lib/resolved-brief";
+import { recordArchetype } from "@/lib/repeat-guard";
 import { limits } from "@/lib/security";
 import { logEvent } from "@/lib/events";
 import { errorJson } from "@/lib/http";
@@ -52,12 +53,16 @@ const Body = z.object({
         })
         .optional(),
       mood: z.string().max(20).optional(),
+      archetype: z.string().max(20).optional(),
+      aspectRatio: z.string().max(12).optional(),
       copy: z
         .object({
           headline: z.string().max(120).optional(),
           subhead: z.string().max(200).optional(),
           cta: z.string().max(40).optional(),
           bullets: z.array(z.string().max(40)).max(3).optional(),
+          price: z.string().max(40).optional(),
+          discount: z.string().max(40).optional(),
         })
         .optional(),
     })
@@ -126,7 +131,12 @@ export async function POST(req: Request) {
                   productPhotoUrl,
                   logoUrl,
                   mood,
+                  archetype:
+                    brief.archetype && isArchetype(brief.archetype) ? brief.archetype : undefined,
+                  aspectRatio: brief.aspectRatio,
                   copy: brief.copy,
+                  price: brief.copy?.price,
+                  discount: brief.copy?.discount,
                 }
               : productPhotoUrl || logoUrl || mood
               ? { productPhotoUrl, logoUrl, mood, productSource: productPhotoUrl ? "uploaded" : undefined }
@@ -137,6 +147,7 @@ export async function POST(req: Request) {
 
     await consumeImage(user.id);
     await logEvent(user.id, "image_generated", { kind: "studio", fallback: result.fallback });
+    await recordArchetype(user.id, result.archetype); // repeat-guard history
 
     // Save to the Library (best-effort — never fail the request on this).
     try {

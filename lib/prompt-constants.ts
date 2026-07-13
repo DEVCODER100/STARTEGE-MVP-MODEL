@@ -6,6 +6,18 @@
 // This module imports nothing (leaf), so it's safe to import from anywhere.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Shared FNV-1a string hash → stable non-negative integer. ONE definition so
+// every seeded picker (levers, palette, archetype) draws from the same hash and
+// their bit-shift slices stay decorrelated. Leaf-safe (no imports).
+export function fnv1a(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
+}
+
 // Keep every headline / subhead / CTA away from the canvas edges.
 export const SAFE_ZONE_RULE =
   "All text stays within 5% padding from every canvas edge. No text touches or crosses edges.";

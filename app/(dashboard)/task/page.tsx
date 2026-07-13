@@ -14,6 +14,7 @@ import type { FrameType } from "@/lib/device-frames";
 import type { BrandAsset } from "@/lib/brand-assets-types";
 import {
   IMAGE_ROLE_LABELS,
+  ARCHETYPE_LABELS,
   type ImageRole,
   type ResolvedBrief,
 } from "@/lib/resolved-brief";
@@ -292,11 +293,15 @@ export default function ImageStudioPage() {
       brief: {
         product: { source: b.product.source, name: b.product.name },
         mood: b.mood,
+        archetype: b.archetype,
+        aspectRatio: b.aspectRatio,
         copy: {
           headline: b.copy.headline,
           subhead: b.copy.subhead,
           cta: b.copy.cta,
           bullets: b.copy.benefits,
+          price: b.copy.price,
+          discount: b.copy.discount,
         },
       },
     });
@@ -580,6 +585,9 @@ export default function ImageStudioPage() {
             <div className="mt-5 rounded-xl border border-strategy bg-strategy-tint/30 p-4">
               <span className="font-mono text-[10px] uppercase tracking-wider text-strategy-deep">Here&apos;s the plan</span>
               <p className="mt-1.5 text-[15px] leading-snug text-ink">{pendingBrief.summary}</p>
+              <span className="mt-2 inline-block rounded-full border border-strategy/40 bg-white px-2.5 py-1 text-[11px] font-medium text-strategy-deep">
+                Style: {ARCHETYPE_LABELS[pendingBrief.brief.archetype]}
+              </span>
               {pendingBrief.assumptions.length > 0 && (
                 <div className="mt-3">
                   <span className="text-xs font-medium text-muted">I filled in a few gaps:</span>

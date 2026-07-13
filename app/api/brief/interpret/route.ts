@@ -8,6 +8,8 @@ import { interpretBrief } from "@/lib/brief-interpreter";
 import { describeStyleReference } from "@/lib/ad-copy";
 import { isAllowedImageUrl, loadImageBuffer } from "@/lib/storage";
 import { briefSummary, IMAGE_ROLES, type BriefImage } from "@/lib/resolved-brief";
+import { recentArchetypes } from "@/lib/repeat-guard";
+import { pickArchetype, isCopyHeavy } from "@/lib/layout-archetypes";
 import { errorJson } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -62,6 +64,17 @@ export async function POST(req: Request) {
     }
 
     const brief = await interpretBrief({ text: parsed.data.text, images, brand, referenceNotes });
+
+    // Repeat guard: never name the same layout the user's last ad used. Re-roll
+    // to a different mood-compatible archetype so the card shows the final style.
+    const recent = await recentArchetypes(user.id, 2);
+    if (recent[0] && recent[0] === brief.archetype) {
+      brief.archetype = pickArchetype(`${brief.brand.name}:${brief.mood}:${brief.platform}:reroll`, brief.mood, {
+        avoid: recent,
+        copyHeavy: isCopyHeavy({ benefits: brief.copy.benefits, price: brief.copy.price }),
+      });
+    }
+
     return NextResponse.json({ brief, summary: briefSummary(brief) });
   } catch (e: unknown) {
     return errorJson(e, { fallback: "Could not interpret the request" });

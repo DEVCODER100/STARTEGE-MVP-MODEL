@@ -10,11 +10,13 @@ import { parseDescription } from "./ad-brief-parser";
 import { mergeWithDefaults } from "./ad-brief-merger";
 import { writeAdCopy, describeScreenshot } from "./ad-copy";
 import { isStrategeBrand } from "./brand-locks";
-import { pickStrategePalette } from "./prompt-constants";
+import { pickStrategePalette, fnv1a } from "./prompt-constants";
 import { compositeScreenshotInFrame, type FrameType } from "./device-frames";
 import { drawSplitAdText } from "./text-overlay";
+import { resolveArchetypeConfig, pickArchetype, isCopyHeavy } from "./layout-archetypes";
 import { logPromptConsole, logPromptFile } from "./prompt-log";
 import type { AdBrief, AdCopy, AdLever, AdMode, ColorCombo } from "./ad-brief";
+import { isMood, type Archetype, type Mood } from "./resolved-brief";
 
 // Ad generation pipeline. Ideogram renders ONLY a text-free background (a hero
 // scene / the product / a flat brand field); ALL ad text is drawn afterward by
@@ -40,6 +42,7 @@ export interface GeneratedAd {
   mode: AdMode | "text";
   color: ColorCombo;
   lever: AdLever;
+  archetype: Archetype;
   fallback: boolean;
   debug: AdDebug;
 }
@@ -58,7 +61,7 @@ export async function generateAd(
     brief.productSource === "upload" && brief.mode === "exact" && !!brief.photoUrl;
   const stratege = isStrategeBrand(brand);
   const palette = stratege
-    ? pickStrategePalette(seedHash(seed))
+    ? pickStrategePalette(fnv1a(seed))
     : { bg: colors[0], accent: colors[1], text: "" };
 
   // Hero product ONLY when explicitly provided: exact photo → remix; lookalike
@@ -85,6 +88,7 @@ export async function generateAd(
     mode: brief.mode ?? "text",
     color: brief.color,
     lever,
+    archetype: r.archetype,
     fallback: r.fallback,
     debug: {
       prompt: r.prompt,
@@ -94,6 +98,7 @@ export async function generateAd(
         colors: stratege ? "brand-locked" : colors,
         side: lever.side,
         render: lever.render,
+        archetype: r.archetype,
       },
     },
   };
@@ -114,7 +119,11 @@ export interface DescribeOptions {
     productPhotoUrl?: string; // role=product_photo → Sharp-composited hero
     logoUrl?: string; // role=logo → Sharp places it, never sent to Ideogram
     mood?: string;
+    archetype?: Archetype; // chosen display-typography layout (else auto-picked)
+    aspectRatio?: string; // Part D
     copy?: Partial<AdCopy>;
+    price?: string;
+    discount?: string;
   };
 }
 
@@ -149,7 +158,7 @@ export async function generateFromDescription(
   const isExact = !!opts.photoUrl && opts.mode === "exact";
   const stratege = isStrategeBrand(brand);
   const palette = stratege
-    ? pickStrategePalette(seedHash(seed))
+    ? pickStrategePalette(fnv1a(seed))
     : { bg: merged.colors[0], accent: merged.colors[1], text: "" };
 
   // Hero product ONLY when explicitly provided. Brief contract first:
@@ -178,6 +187,10 @@ export async function generateFromDescription(
     mood: brief?.mood ?? merged.mood,
     productPhotoUrl: brief?.productPhotoUrl,
     logoUrl: brief?.logoUrl,
+    archetype: brief?.archetype,
+    aspectRatio: brief?.aspectRatio,
+    price: brief?.price,
+    discount: brief?.discount,
   });
 
   return {
@@ -186,6 +199,7 @@ export async function generateFromDescription(
     mode: opts.mode ?? "text",
     color: "brand",
     lever: pickLever(seed),
+    archetype: r.archetype,
     fallback: r.fallback,
     debug: {
       prompt: r.prompt,
@@ -198,6 +212,7 @@ export async function generateFromDescription(
         side: merged.side,
         render: merged.render,
         mood: brief?.mood ?? merged.mood,
+        archetype: r.archetype,
         briefProduct: brief?.productSource ?? "(legacy)",
       },
     },
@@ -249,7 +264,7 @@ export async function generateScreenshotAd(
   const stratege = isStrategeBrand(brand);
   const textSide: "left" | "right" = mockupSide === "left" ? "right" : "left";
   const palette = stratege
-    ? pickStrategePalette(seedHash(seed))
+    ? pickStrategePalette(fnv1a(seed))
     : { bg: merged.colors[0], accent: merged.colors[1], text: "" };
 
   // FLAT Sharp brand-color field for ALL screenshot ads — exact palette, no
@@ -302,6 +317,7 @@ export async function generateScreenshotAd(
     mode: "text",
     color: "brand",
     lever: pickLever(seed),
+    archetype: "HERO_LEFT",
     fallback,
     debug: {
       prompt,
@@ -337,10 +353,22 @@ async function renderFullCanvasAd(opts: {
   mood?: string | null;
   productPhotoUrl?: string; // brief role=product_photo → Sharp-composited hero
   logoUrl?: string; // brief role=logo → Sharp places it bottom corner
-}): Promise<{ url: string; fallback: boolean; prompt: string }> {
+  archetype?: Archetype; // chosen layout (else auto-picked from seed+mood)
+  aspectRatio?: string; // Part D (square for now)
+  price?: string;
+  discount?: string;
+}): Promise<{ url: string; fallback: boolean; prompt: string; archetype: Archetype }> {
   const { copy, seed, side, brandLocked, palette, product, render, photoUrl, mood, productPhotoUrl, logoUrl } = opts;
   const textSide: "left" | "right" = side === "left" ? "left" : "right";
   const forRemix = !!photoUrl;
+
+  // Resolve the display-typography archetype. Copy-heavy briefs → TEXT_HEAVY;
+  // otherwise a seeded, mood-compatible pick. The config drives all Sharp geometry.
+  const moodKey: Mood = isMood(mood) ? mood : "bold";
+  const chosenArchetype: Archetype =
+    opts.archetype ??
+    pickArchetype(seed, moodKey, { copyHeavy: isCopyHeavy({ benefits: copy.bullets, price: opts.price }) });
+  const archCfg = resolveArchetypeConfig(chosenArchetype, opts.aspectRatio);
 
   const prompt = buildBackgroundPrompt({
     bg: palette.bg,
@@ -415,20 +443,14 @@ async function renderFullCanvasAd(opts: {
     cta: copy.cta,
     palette,
     logo: logoBuf,
+    archetype: archCfg,
+    benefits: copy.bullets,
+    price: opts.price,
+    discount: opts.discount,
   });
   const url = await storeImage(final, "jpg");
   await logPromptFile(prompt, url);
-  return { url, fallback: result.fallback, prompt };
-}
-
-// FNV-1a hash for palette rotation (mirrors ad-prompt-builder).
-function seedHash(seed: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return Math.abs(h);
+  return { url, fallback: result.fallback, prompt, archetype: chosenArchetype };
 }
 
 // Stored per generated message so an edit can regenerate without re-asking.

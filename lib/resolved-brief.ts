@@ -17,6 +17,15 @@ export type Platform =
   | "twitter"
   | "facebook";
 
+// Display-typography layout. Draw-geometry for each lives in the SSOT
+// lib/layout-archetypes.ts; this union stays here because it is client-safe.
+export type Archetype =
+  | "HERO_TYPE" // full-width uppercase display headline (the "UNLEASH" look)
+  | "HERO_LEFT" // stacked left-aligned headline (the classic split)
+  | "BANNER_BOTTOM" // background dominant, text band at the bottom third
+  | "SPLIT_DIAGONAL" // headline in the calmer half of a diagonal split
+  | "TEXT_HEAVY"; // headline + subhead + checklist + price for benefit-rich briefs
+
 export interface BriefImage {
   id: string; // the stored URL (blob) doubles as the id
   role: ImageRole;
@@ -45,6 +54,7 @@ export interface ResolvedBrief {
   mood: Mood;
   platform: Platform;
   aspectRatio: string; // derived from platform (render is 1:1 for now — flagged)
+  archetype: Archetype; // display-typography layout (see lib/layout-archetypes)
   assumptions: string[]; // everything the interpreter filled in / guessed
 }
 
@@ -63,6 +73,27 @@ export const IMAGE_ROLE_LABELS: Record<ImageRole, string> = {
 };
 
 export const MOODS: Mood[] = ["energetic", "premium", "minimal", "warm", "bold"];
+
+export const ARCHETYPES: Archetype[] = [
+  "HERO_TYPE",
+  "HERO_LEFT",
+  "BANNER_BOTTOM",
+  "SPLIT_DIAGONAL",
+  "TEXT_HEAVY",
+];
+
+// Human labels for the confirmation card ("use the big headline style").
+export const ARCHETYPE_LABELS: Record<Archetype, string> = {
+  HERO_TYPE: "Big headline",
+  HERO_LEFT: "Classic left",
+  BANNER_BOTTOM: "Bottom banner",
+  SPLIT_DIAGONAL: "Diagonal split",
+  TEXT_HEAVY: "Detail-rich",
+};
+
+export function isArchetype(v: unknown): v is Archetype {
+  return typeof v === "string" && (ARCHETYPES as string[]).includes(v);
+}
 
 export const PLATFORM_ASPECT: Record<Platform, string> = {
   instagram_post: "1:1",
@@ -97,5 +128,5 @@ export function briefSummary(b: ResolvedBrief): string {
       ? `“${b.product.name}” as the hero`
       : "no product shown — abstract background";
   const platform = b.platform.replace("_", " ");
-  return `Ad for ${b.brand.name} · ${prod} · ${b.mood} mood · ${platform}`;
+  return `Ad for ${b.brand.name} · ${prod} · ${b.mood} mood · ${ARCHETYPE_LABELS[b.archetype]} layout · ${platform}`;
 }
