@@ -47,6 +47,12 @@ export interface GeneratedAd {
   debug: AdDebug;
 }
 
+// The user's saved default logo (brand_profiles.logo_url) — applied when no
+// logo was uploaded for this specific ad, so they upload once.
+function defaultLogoUrl(brand: Record<string, unknown>): string | undefined {
+  return typeof brand.logo_url === "string" && brand.logo_url ? brand.logo_url : undefined;
+}
+
 export async function generateAd(
   brand: Record<string, unknown>,
   brief: AdBrief,
@@ -80,6 +86,7 @@ export async function generateAd(
     product: heroSubject,
     render: lever.render,
     photoUrl: isExact ? brief.photoUrl : undefined,
+    logoUrl: defaultLogoUrl(brand),
   });
 
   return {
@@ -186,7 +193,7 @@ export async function generateFromDescription(
     photoUrl: isExact ? opts.photoUrl : undefined,
     mood: brief?.mood ?? merged.mood,
     productPhotoUrl: brief?.productPhotoUrl,
-    logoUrl: brief?.logoUrl,
+    logoUrl: brief?.logoUrl ?? defaultLogoUrl(brand),
     archetype: brief?.archetype,
     aspectRatio: brief?.aspectRatio,
     price: brief?.price,

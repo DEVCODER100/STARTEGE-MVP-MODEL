@@ -97,6 +97,7 @@ export default function ImageStudioPage() {
   const [uploadFrame, setUploadFrame] = useState<Frame>("laptop");
   const [uploadRole, setUploadRole] = useState<ImageRole>("screenshot");
   const [saveToBrand, setSaveToBrand] = useState(true);
+  const [saveLogoDefault, setSaveLogoDefault] = useState(true);
 
   // Interpretation layer: the confirmation moment before any credit is spent.
   const [interpreting, setInterpreting] = useState(false);
@@ -184,6 +185,14 @@ export default function ImageStudioPage() {
     if (showUpload && pendingFile) {
       if (uploadRole !== "screenshot") {
         const url = await uploadRoleImage(pendingFile);
+        // Save a logo once as the brand default (reuses brand_profiles.logo_url).
+        if (uploadRole === "logo" && saveLogoDefault) {
+          fetch("/api/brand/update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ logo_url: url }),
+          }).catch(() => {});
+        }
         return { kind: "image", url, role: uploadRole };
       }
       const form = new FormData();
@@ -560,6 +569,17 @@ export default function ImageStudioPage() {
                           💾 Save to Brand Book for reuse
                         </label>
                       </>
+                    )}
+
+                    {uploadRole === "logo" && (
+                      <label className="mt-3 flex items-center gap-2 text-xs text-ink">
+                        <input
+                          type="checkbox"
+                          checked={saveLogoDefault}
+                          onChange={(e) => setSaveLogoDefault(e.target.checked)}
+                        />
+                        ⭐ Save as my default logo (auto-added to future ads)
+                      </label>
                     )}
 
                     {assets.length > 0 && (

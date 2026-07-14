@@ -171,6 +171,19 @@ function sizeHeadline(
   return { size: floor, lines: wrap(ctx, text, font(floor), colW).slice(0, cfg.maxLines) };
 }
 
+// A white silhouette of the logo (for dark slots). Draws the logo into an
+// offscreen canvas, then "source-in" fills it white — keeps the shape, drops the
+// colour. Assumes a transparent-PNG logo (the common case).
+function whiteLogo(logoImg: import("@napi-rs/canvas").Image, w: number, h: number) {
+  const off = createCanvas(w, h);
+  const octx = off.getContext("2d");
+  octx.drawImage(logoImg, 0, 0, w, h);
+  octx.globalCompositeOperation = "source-in";
+  octx.fillStyle = "#FFFFFF";
+  octx.fillRect(0, 0, w, h);
+  return off;
+}
+
 // Draw a small check icon at (x, midY), sized to `s`. Icon-only — the strings
 // carry no checkmark characters.
 function drawCheck(ctx: Ctx, x: number, midY: number, s: number, color: string): void {
@@ -346,7 +359,7 @@ export async function drawSplitAdText(image: Buffer, opts: SplitTextOptions): Pr
     ctx.textBaseline = "top";
   }
 
-  // ── logo slot (Part A: original variant only; contrast handling is Part B) ──
+  // ── logo slot: white on dark zones, original on light, scrim-pad on mid ─────
   if (opts.logo) {
     try {
       const logoImg = await loadImage(opts.logo);
@@ -362,7 +375,19 @@ export async function drawSplitAdText(image: Buffer, opts: SplitTextOptions): Pr
           ? W - m - logoW
           : m;
       const ly = corner === "tl" || corner === "tr" ? m : H - m - logoH;
-      ctx.drawImage(logoImg, lx, ly, logoW, logoH);
+
+      // Sample the slot region on the COMPOSITED bg, before drawing the logo.
+      const slotLum = zoneLuminance(ctx, lx, ly, logoW, logoH, W, H);
+      const dark = slotLum === null || slotLum < 0.5; // dark slot → white logo
+      // Ambiguous mid-tone → a soft rounded pad guarantees separation.
+      if (slotLum !== null && slotLum >= 0.4 && slotLum <= 0.62) {
+        const pad = Math.round(logoW * 0.14);
+        roundRect(ctx, lx - pad, ly - pad, logoW + pad * 2, logoH + pad * 2, Math.round(pad));
+        ctx.fillStyle = dark ? "rgba(0,0,0,0.42)" : "rgba(255,255,255,0.55)";
+        ctx.fill();
+      }
+      if (dark) ctx.drawImage(whiteLogo(logoImg, logoW, logoH), lx, ly, logoW, logoH);
+      else ctx.drawImage(logoImg, lx, ly, logoW, logoH);
     } catch {
       /* logo drawing is best-effort */
     }
