@@ -7,10 +7,12 @@ const IDEOGRAM_V4_URL = "https://api.ideogram.ai/v1/ideogram-v4/generate";
 // The single model Stratège uses. Do not change without intent — cost depends on it.
 const RENDERING_SPEED = "TURBO"; // 4.0 Turbo — ~$0.03 / image
 
+export type IdeogramAspect = "ASPECT_4_5" | "ASPECT_1_1" | "ASPECT_9_16" | "ASPECT_16_9";
+
 export interface ImageGenOptions {
   prompt: string;
   count?: number; // 1-3
-  aspectRatio?: "ASPECT_4_5" | "ASPECT_1_1" | "ASPECT_9_16";
+  aspectRatio?: IdeogramAspect;
 }
 
 export interface ImageGenResult {
@@ -24,6 +26,7 @@ const ASPECT_V3: Record<string, string> = {
   ASPECT_4_5: "4x5",
   ASPECT_1_1: "1x1",
   ASPECT_9_16: "9x16",
+  ASPECT_16_9: "16x9",
 };
 
 function placeholders(prompt: string, count: number): string[] {
@@ -102,7 +105,7 @@ export interface RemixOptions {
   prompt: string;
   imageBuffer: Buffer;
   imageWeight?: number; // 1-100; lower = freer reinterpretation. ~60-75 keeps product.
-  aspectRatio?: "ASPECT_4_5" | "ASPECT_1_1" | "ASPECT_9_16";
+  aspectRatio?: IdeogramAspect;
 }
 
 // Remix keeps the user's REAL product (from the uploaded photo) while rendering

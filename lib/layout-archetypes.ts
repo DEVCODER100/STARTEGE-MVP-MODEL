@@ -82,6 +82,14 @@ export const ARCHETYPE_CONFIGS: Record<Archetype, ArchetypeConfig> = {
     logoSlot: { corner: "br", widthFrac: 0.09 },
     scrim: { enabled: true, maxDarkness: 0.4 },
     compatibleMoods: ALL_MOODS,
+    aspectOverrides: {
+      // Story/portrait: headline in the top third, more vertical breathing.
+      "9:16": { block: { yFrac: 0.06 } },
+      "4:5": { block: { yFrac: 0.07 } },
+      // Landscape is short — fewer lines, smaller cap so it never overflows.
+      "1.91:1": { block: { yFrac: 0.1, widthFrac: 0.9 }, headline: { scaleFrac: 0.14, maxLines: 2 } },
+      "16:9": { block: { yFrac: 0.1, widthFrac: 0.9 }, headline: { scaleFrac: 0.15, maxLines: 2 } },
+    },
   },
   // The classic split — reproduces the pre-Phase-2 layout (back-compat default).
   HERO_LEFT: {
@@ -96,6 +104,13 @@ export const ARCHETYPE_CONFIGS: Record<Archetype, ArchetypeConfig> = {
     logoSlot: { corner: "tr", widthFrac: 0.08 },
     scrim: { enabled: true, maxDarkness: 0.35 },
     compatibleMoods: ALL_MOODS,
+    aspectOverrides: {
+      "9:16": { block: { widthFrac: 0.5 } },
+      "4:5": { block: { widthFrac: 0.46 } },
+      // Landscape: a wider column, smaller headline so it fits the short height.
+      "1.91:1": { block: { widthFrac: 0.52 }, headline: { scaleFrac: 0.058, maxLines: 3 } },
+      "16:9": { block: { widthFrac: 0.5 }, headline: { scaleFrac: 0.06, maxLines: 3 } },
+    },
   },
   // Background dominant; a text band sits across the bottom third.
   BANNER_BOTTOM: {
@@ -110,6 +125,14 @@ export const ARCHETYPE_CONFIGS: Record<Archetype, ArchetypeConfig> = {
     logoSlot: { corner: "tl", widthFrac: 0.08 },
     scrim: { enabled: true, maxDarkness: 0.45 },
     compatibleMoods: ALL_MOODS,
+    aspectOverrides: {
+      // Keep the text band anchored to the bottom third as the canvas gets taller.
+      "9:16": { block: { yFrac: 0.72 } },
+      "4:5": { block: { yFrac: 0.71 } },
+      // Landscape: band sits higher (short canvas), smaller headline, 2 lines.
+      "1.91:1": { block: { yFrac: 0.56 }, headline: { scaleFrac: 0.07, maxLines: 2 } },
+      "16:9": { block: { yFrac: 0.6 }, headline: { scaleFrac: 0.072, maxLines: 2 } },
+    },
   },
   // Headline anchored in the calmer half of the bold-mood diagonal split.
   SPLIT_DIAGONAL: {
@@ -124,6 +147,12 @@ export const ARCHETYPE_CONFIGS: Record<Archetype, ArchetypeConfig> = {
     logoSlot: { corner: "br", widthFrac: 0.08 },
     scrim: { enabled: true, maxDarkness: 0.35 },
     compatibleMoods: ["bold", "energetic"],
+    aspectOverrides: {
+      "9:16": { block: { yFrac: 0.26, widthFrac: 0.5 } },
+      "4:5": { block: { yFrac: 0.28, widthFrac: 0.48 } },
+      "1.91:1": { block: { widthFrac: 0.5 }, headline: { scaleFrac: 0.06, maxLines: 2 } },
+      "16:9": { block: { widthFrac: 0.48 }, headline: { scaleFrac: 0.062, maxLines: 2 } },
+    },
   },
   // Benefit-rich: headline + subhead + checklist + price. Auto-selected for
   // copy-heavy briefs (see pickArchetype).
@@ -139,6 +168,14 @@ export const ARCHETYPE_CONFIGS: Record<Archetype, ArchetypeConfig> = {
     logoSlot: { corner: "tr", widthFrac: 0.07 },
     scrim: { enabled: true, maxDarkness: 0.4 },
     compatibleMoods: ALL_MOODS,
+    aspectOverrides: {
+      // Portrait gives the stacked block more room — widen it a touch.
+      "9:16": { block: { yFrac: 0.42, widthFrac: 0.6 } },
+      "4:5": { block: { widthFrac: 0.56 } },
+      // Landscape is cramped for benefit-rich copy — shrink type, cap lines.
+      "1.91:1": { block: { widthFrac: 0.56 }, headline: { scaleFrac: 0.05, maxLines: 2 } },
+      "16:9": { block: { widthFrac: 0.54 }, headline: { scaleFrac: 0.052, maxLines: 2 } },
+    },
   },
 };
 

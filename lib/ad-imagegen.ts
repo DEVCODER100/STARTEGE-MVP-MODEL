@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { generateImages, remixImage } from "./ideogram";
+import { generateImages, remixImage, type IdeogramAspect } from "./ideogram";
 import { loadImageBuffer, storeImage } from "./storage";
 import {
   buildBackgroundPrompt,
@@ -80,6 +80,25 @@ export interface AdRenderState {
 // logo was uploaded for this specific ad, so they upload once.
 function defaultLogoUrl(brand: Record<string, unknown>): string | undefined {
   return typeof brand.logo_url === "string" && brand.logo_url ? brand.logo_url : undefined;
+}
+
+// Target canvas + nearest Ideogram aspect for a brief's aspect ratio (Part D).
+// Ideogram renders the nearest supported ratio; Sharp cover-crops to the exact
+// pixels, and the archetype's aspectOverrides re-anchor the text.
+export type CanvasSpec = { w: number; h: number; ideogram: IdeogramAspect };
+export function canvasFor(aspectRatio?: string): CanvasSpec {
+  switch (aspectRatio) {
+    case "4:5":
+      return { w: 1080, h: 1350, ideogram: "ASPECT_4_5" };
+    case "9:16":
+      return { w: 1080, h: 1920, ideogram: "ASPECT_9_16" };
+    case "1.91:1":
+      return { w: 1200, h: 628, ideogram: "ASPECT_16_9" };
+    case "16:9":
+      return { w: 1200, h: 675, ideogram: "ASPECT_16_9" };
+    default: // "1:1"
+      return { w: 1080, h: 1080, ideogram: "ASPECT_1_1" };
+  }
 }
 
 export async function generateAd(
@@ -411,7 +430,7 @@ async function renderFullCanvasAd(opts: {
   productPhotoUrl?: string; // brief role=product_photo → Sharp-composited hero
   logoUrl?: string; // brief role=logo → Sharp places it bottom corner
   archetype?: Archetype; // chosen layout (else auto-picked from seed+mood)
-  aspectRatio?: string; // Part D (square for now)
+  aspectRatio?: string; // Part D: "1:1" | "4:5" | "9:16" | "1.91:1" | "16:9"
   price?: string;
   discount?: string;
 }): Promise<{ url: string; fallback: boolean; prompt: string; archetype: Archetype; state: AdRenderState }> {
@@ -426,6 +445,7 @@ async function renderFullCanvasAd(opts: {
     opts.archetype ??
     pickArchetype(seed, moodKey, { copyHeavy: isCopyHeavy({ benefits: copy.bullets, price: opts.price }) });
   const archCfg = resolveArchetypeConfig(chosenArchetype, opts.aspectRatio);
+  const { w: W, h: H, ideogram: ideoAspect } = canvasFor(opts.aspectRatio);
 
   const prompt = buildBackgroundPrompt({
     bg: palette.bg,
@@ -448,14 +468,14 @@ async function renderFullCanvasAd(opts: {
       prompt,
       imageBuffer: buf,
       imageWeight: REMIX_IMAGE_WEIGHT,
-      aspectRatio: "ASPECT_1_1",
+      aspectRatio: ideoAspect,
     });
   } else {
-    result = await generateImages({ prompt, count: 1, aspectRatio: "ASPECT_1_1" });
+    result = await generateImages({ prompt, count: 1, aspectRatio: ideoAspect });
   }
 
   let bg = await sharp(await loadImageBuffer(result.urls[0]))
-    .resize(AD_SIZE, AD_SIZE, { fit: "cover" })
+    .resize(W, H, { fit: "cover" })
     .toBuffer();
 
   // Composite an uploaded product photo as the hero (floating treatment:
@@ -464,10 +484,10 @@ async function renderFullCanvasAd(opts: {
     try {
       const photoBuf = await loadImageBuffer(productPhotoUrl);
       const framed = await compositeScreenshotInFrame(photoBuf, "floating");
-      const half = AD_SIZE / 2;
+      const half = W / 2;
       const isPortrait = framed.height > framed.width;
-      const boxW = (isPortrait ? 0.38 : 0.44) * AD_SIZE;
-      const boxH = (isPortrait ? 0.76 : 0.62) * AD_SIZE;
+      const boxW = (isPortrait ? 0.38 : 0.44) * W;
+      const boxH = (isPortrait ? 0.76 : 0.62) * H;
       const scale = Math.min(boxW / framed.width, boxH / framed.height);
       const drawW = Math.round(framed.width * scale);
       const drawH = Math.round(framed.height * scale);
@@ -476,7 +496,7 @@ async function renderFullCanvasAd(opts: {
         textSide === "left"
           ? Math.round(half + (half - drawW) / 2)
           : Math.round((half - drawW) / 2);
-      const top = Math.round((AD_SIZE - drawH) / 2);
+      const top = Math.round((H - drawH) / 2);
       bg = await sharp(bg).composite([{ input: resized, left, top }]).jpeg({ quality: 95 }).toBuffer();
     } catch {
       /* photo compositing is best-effort — the ad still works without it */
