@@ -13,7 +13,7 @@ import { isStrategeBrand } from "./brand-locks";
 import { pickStrategePalette, fnv1a } from "./prompt-constants";
 import { compositeScreenshotInFrame, type FrameType } from "./device-frames";
 import { drawSplitAdText } from "./text-overlay";
-import { resolveArchetypeConfig, pickArchetype, isCopyHeavy } from "./layout-archetypes";
+import { resolveArchetypeConfig, pickArchetype, isCopyHeavy, type Corner } from "./layout-archetypes";
 import { logPromptConsole, logPromptFile } from "./prompt-log";
 import type { AdBrief, AdCopy, AdLever, AdMode, ColorCombo } from "./ad-brief";
 import { isMood, type Archetype, type Mood } from "./resolved-brief";
@@ -45,6 +45,35 @@ export interface GeneratedAd {
   archetype: Archetype;
   fallback: boolean;
   debug: AdDebug;
+  state?: AdRenderState; // everything needed to re-edit this ad (Part C)
+}
+
+// Everything needed to RE-RENDER an ad without re-asking anything (Part C —
+// conversational editing). Persisted per generation (chat_messages.image_meta).
+//  • a text-side edit (copy / archetype / logo slot) re-runs Sharp over
+//    `backgroundUrl` with NO Ideogram call and NO credit (same background pixels);
+//  • a background-side edit (mood / product) regenerates the Ideogram bg (1 credit).
+export interface AdRenderState {
+  v: 3;
+  backgroundUrl: string; // the pre-text background (Ideogram bg + composited product photo)
+  brandLocked: boolean;
+  palette: { bg: string; accent: string; text: string };
+  textSide: "left" | "right";
+  side: AdLever["side"];
+  seed: string;
+  render?: string;
+  archetype: Archetype;
+  aspectRatio?: string;
+  mood?: string;
+  copy: AdCopy;
+  price?: string;
+  discount?: string;
+  logoUrl?: string;
+  logoCorner?: Corner; // "move logo" edits override the archetype's default slot
+  productPhotoUrl?: string; // uploaded hero (already baked into backgroundUrl)
+  productName?: string; // named hero (for a background regen)
+  // Set transiently when a background edit is proposed but awaiting confirmation.
+  pendingEdit?: { changes: string[]; next: Partial<AdRenderState> } | null;
 }
 
 // The user's saved default logo (brand_profiles.logo_url) — applied when no
@@ -97,6 +126,7 @@ export async function generateAd(
     lever,
     archetype: r.archetype,
     fallback: r.fallback,
+    state: r.state,
     debug: {
       prompt: r.prompt,
       levers: {
@@ -208,6 +238,7 @@ export async function generateFromDescription(
     lever: pickLever(seed),
     archetype: r.archetype,
     fallback: r.fallback,
+    state: r.state,
     debug: {
       prompt: r.prompt,
       parsedFields: parsed,
@@ -306,6 +337,10 @@ export async function generateScreenshotAd(
     .jpeg({ quality: 95 })
     .toBuffer();
 
+  // Persist the pre-text background (flat field + framed screenshot) so a
+  // text-only edit can re-render over these exact pixels (Part C).
+  const backgroundUrl = await storeImage(composited, "jpg");
+
   // 6b) Draw headline + subhead + CTA on the text side, inside a 5% safe zone,
   //     in the brand serif — guaranteed placement.
   const finalBuf = await drawSplitAdText(composited, {
@@ -318,6 +353,20 @@ export async function generateScreenshotAd(
   const url = await storeImage(finalBuf, "jpg");
   await logPromptFile(prompt, url);
 
+  const state: AdRenderState = {
+    v: 3,
+    backgroundUrl,
+    brandLocked: stratege,
+    palette: { bg: palette.bg, accent: palette.accent, text: palette.text },
+    textSide,
+    side: merged.side,
+    seed,
+    archetype: "HERO_LEFT",
+    copy,
+    // A screenshot ad's background is a composed device frame, not an Ideogram
+    // field — only text-side edits are meaningful (no mood/product regen).
+    productPhotoUrl: opts.screenshotUrl,
+  };
   return {
     url,
     copy,
@@ -326,6 +375,7 @@ export async function generateScreenshotAd(
     lever: pickLever(seed),
     archetype: "HERO_LEFT",
     fallback,
+    state,
     debug: {
       prompt,
       parsedFields: { visionDesc, frameType: opts.frameType, mockupSide, textSide },
@@ -364,7 +414,7 @@ async function renderFullCanvasAd(opts: {
   aspectRatio?: string; // Part D (square for now)
   price?: string;
   discount?: string;
-}): Promise<{ url: string; fallback: boolean; prompt: string; archetype: Archetype }> {
+}): Promise<{ url: string; fallback: boolean; prompt: string; archetype: Archetype; state: AdRenderState }> {
   const { copy, seed, side, brandLocked, palette, product, render, photoUrl, mood, productPhotoUrl, logoUrl } = opts;
   const textSide: "left" | "right" = side === "left" ? "left" : "right";
   const forRemix = !!photoUrl;
@@ -433,6 +483,10 @@ async function renderFullCanvasAd(opts: {
     }
   }
 
+  // Persist the pre-text background so a text-only edit can re-render Sharp over
+  // these exact pixels later with NO Ideogram call and NO credit (Part C).
+  const backgroundUrl = await storeImage(bg, "jpg");
+
   // Logo: loaded here (fs/network), drawn by the text overlay — never Ideogram.
   let logoBuf: Buffer | undefined;
   if (logoUrl) {
@@ -457,7 +511,94 @@ async function renderFullCanvasAd(opts: {
   });
   const url = await storeImage(final, "jpg");
   await logPromptFile(prompt, url);
-  return { url, fallback: result.fallback, prompt, archetype: chosenArchetype };
+
+  const state: AdRenderState = {
+    v: 3,
+    backgroundUrl,
+    brandLocked,
+    palette,
+    textSide,
+    side,
+    seed,
+    render,
+    archetype: chosenArchetype,
+    aspectRatio: opts.aspectRatio,
+    mood: mood ?? undefined,
+    copy,
+    price: opts.price,
+    discount: opts.discount,
+    logoUrl,
+    productPhotoUrl,
+    productName: product,
+  };
+  return { url, fallback: result.fallback, prompt, archetype: chosenArchetype, state };
+}
+
+// ─── Part C: conversational-editing re-renders ───────────────────────────────
+
+// Re-draw the text/logo layer over a previously stored background — the FREE
+// path for a text-side edit (copy / archetype / logo slot). No Ideogram call,
+// no credit, and the background pixels are byte-identical to the original.
+export async function rerenderOverBackground(
+  state: AdRenderState
+): Promise<{ url: string; state: AdRenderState }> {
+  const bg = await loadImageBuffer(state.backgroundUrl);
+  let logoBuf: Buffer | undefined;
+  if (state.logoUrl) {
+    try {
+      logoBuf = await loadImageBuffer(state.logoUrl);
+    } catch {
+      /* optional */
+    }
+  }
+  const final = await drawSplitAdText(bg, {
+    textSide: state.textSide,
+    headline: state.copy.headline,
+    subhead: state.copy.subhead ?? "",
+    cta: state.copy.cta,
+    palette: state.palette,
+    logo: logoBuf,
+    logoCorner: state.logoCorner,
+    archetype: resolveArchetypeConfig(state.archetype, state.aspectRatio),
+    benefits: state.copy.bullets,
+    price: state.price,
+    discount: state.discount,
+  });
+  const url = await storeImage(final, "jpg");
+  return { url, state: { ...state, pendingEdit: null } };
+}
+
+// Regenerate the Ideogram background for a background-side edit (mood / product),
+// keeping the same copy, archetype, palette and layout. Costs 1 credit.
+export async function regenerateFromState(state: AdRenderState): Promise<GeneratedAd> {
+  const r = await renderFullCanvasAd({
+    copy: state.copy,
+    seed: state.seed,
+    side: state.side,
+    brandLocked: state.brandLocked,
+    palette: state.palette,
+    product: state.productPhotoUrl ? undefined : state.productName,
+    render: state.render,
+    mood: state.mood,
+    productPhotoUrl: state.productPhotoUrl,
+    logoUrl: state.logoUrl,
+    archetype: state.archetype,
+    aspectRatio: state.aspectRatio,
+    price: state.price,
+    discount: state.discount,
+  });
+  const nextState: AdRenderState = { ...r.state, logoCorner: state.logoCorner, pendingEdit: null };
+  return {
+    url: r.url,
+    copy: state.copy,
+    mode: "text",
+    color: "brand",
+    lever: pickLever(state.seed),
+    archetype: r.archetype,
+    fallback: r.fallback,
+    state: nextState,
+    debug: { prompt: r.prompt, levers: { regen: true, mood: state.mood, archetype: r.archetype } },
+  };
 }
 
 // Stored per generated message so an edit can regenerate without re-asking.

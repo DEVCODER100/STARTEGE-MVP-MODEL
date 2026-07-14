@@ -1,6 +1,6 @@
 import { createCanvas, loadImage, GlobalFonts } from "@napi-rs/canvas";
 import path from "path";
-import { ARCHETYPE_CONFIGS, LOGO_WIDTH_MIN, LOGO_WIDTH_MAX, type ArchetypeConfig } from "./layout-archetypes";
+import { ARCHETYPE_CONFIGS, LOGO_WIDTH_MIN, LOGO_WIDTH_MAX, type ArchetypeConfig, type Corner } from "./layout-archetypes";
 import { stripChecks } from "./resolved-brief";
 
 // Deterministic display-typography rendering. Ideogram makes only the text-free
@@ -35,6 +35,7 @@ export interface SplitTextOptions {
   cta?: string;
   palette: SplitTextPalette;
   logo?: Buffer; // brand logo — drawn small in the archetype's slot, never by Ideogram
+  logoCorner?: Corner; // override the archetype slot (e.g. a "move logo top-left" edit)
   archetype?: ArchetypeConfig; // resolved config; defaults to HERO_LEFT (back-compat)
   benefits?: string[]; // checklist items (TEXT_HEAVY / HERO_TYPE)
   price?: string;
@@ -367,7 +368,7 @@ export async function drawSplitAdText(image: Buffer, opts: SplitTextOptions): Pr
       const logoW = Math.round(W * widthFrac);
       const logoH = Math.round((logoImg.height / logoImg.width) * logoW);
       const m = safeX + Math.round(W * 0.04); // safe zone + 4% corner exclusion
-      const corner = cfg.logoSlot.corner;
+      const corner = opts.logoCorner ?? cfg.logoSlot.corner;
       const lx =
         corner === "bc"
           ? Math.round((W - logoW) / 2)

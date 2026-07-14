@@ -8,6 +8,7 @@ import {
   PLATFORM_ASPECT,
   isMood,
   isPlatform,
+  isArchetype,
   stripChecks,
 } from "./resolved-brief";
 import { pickArchetype, isCopyHeavy } from "./layout-archetypes";
@@ -188,5 +189,103 @@ export async function interpretBrief(input: InterpretInput): Promise<ResolvedBri
     );
   } catch {
     return fallbackBrief(input, "interpreter unavailable — used a minimal default brief");
+  }
+}
+
+// ─── EDIT mode (Part C) ──────────────────────────────────────────────────────
+// The payoff of the interpretation layer: apply ONE conversational change to an
+// existing ad, keeping everything else identical. Never invents a product. The
+// route decides text-side (free Sharp re-render) vs background-side (regen) —
+// but we also classify here so the confirmation copy is right.
+
+export interface EditableAd {
+  headline: string;
+  subhead?: string;
+  cta: string;
+  benefits?: string[];
+  price?: string;
+  discount?: string;
+  mood?: string;
+  archetype: string; // Archetype id
+  logoCorner?: string; // tl | tr | bl | br | bc
+}
+
+export interface EditOutcome {
+  changes: string[]; // human-readable, for the confirmation card
+  kind: "text" | "background"; // text → free re-render; background → 1 credit
+  next: EditableAd; // the full spec with the change applied
+}
+
+const CORNERS = ["tl", "tr", "bl", "br", "bc"];
+
+const EDIT_SYSTEM = `You revise ONE advertisement spec by applying ONLY the change the user asks for. Keep every other field EXACTLY as given — never rewrite copy the user didn't mention, never invent or change the product.
+
+Respond with ONLY JSON, no preamble or fences:
+{
+  "next": { "headline": "...", "subhead": "string or null", "cta": "...", "benefits": ["..."] or null, "price": "string or null", "discount": "string or null", "mood": "...", "archetype": "...", "logoCorner": "tl|tr|bl|br|bc or null" },
+  "changes": ["one short phrase per change"]
+}
+
+Rules:
+- "next" is the CURRENT spec with the requested change applied — copy every unchanged field through verbatim.
+- mood ∈ energetic|premium|minimal|warm|bold. archetype ∈ HERO_TYPE|HERO_LEFT|BANNER_BOTTOM|SPLIT_DIAGONAL|TEXT_HEAVY. logoCorner ∈ tl|tr|bl|br|bc.
+- Map style requests: "big headline"/"bigger text"/"hero"/"bold display" → HERO_TYPE; "classic"/"left" → HERO_LEFT; "bottom"/"banner" → BANNER_BOTTOM; "diagonal"/"split" → SPLIT_DIAGONAL; "detailed"/"features"/"checklist"/"benefits list" → TEXT_HEAVY.
+- "move logo top left" → logoCorner "tl"; top right → "tr"; bottom left → "bl"; bottom right → "br"; center → "bc".
+- changes: short phrases like "Headline → 'SHIP FASTER'", "CTA → 'Buy Now'", "Mood → premium", "Style → Big headline", "Logo → top-left".
+- Ambiguous request ("make it pop") → make the single smallest concrete change (e.g. archetype → HERO_TYPE) and say what you assumed in changes.
+- If nothing actionable, return next = current unchanged and changes = [].`;
+
+export async function interpretEdit(current: EditableAd, editRequest: string): Promise<EditOutcome> {
+  const fallback: EditOutcome = { changes: [], kind: "text", next: current };
+  try {
+    const r = await chat({
+      model: "sonnet",
+      system: EDIT_SYSTEM,
+      temperature: 0.2,
+      maxTokens: 400,
+      messages: [
+        {
+          role: "user",
+          content: `Current spec:\n${JSON.stringify(current)}\n\nUser's edit:\n"""${editRequest.trim().slice(0, 500)}"""`,
+        },
+      ],
+    });
+    const cleaned = r.text.replace(/```(json)?/gi, "");
+    const s = cleaned.indexOf("{");
+    const e = cleaned.lastIndexOf("}");
+    if (s === -1 || e === -1) return fallback;
+    const o = JSON.parse(cleaned.slice(s, e + 1));
+    const n = o?.next ?? {};
+
+    // Validate + coerce; anything invalid falls back to the current value, so a
+    // model slip can never corrupt the spec.
+    const next: EditableAd = {
+      headline: str(n.headline, 60) ?? current.headline,
+      subhead: str(n.subhead, 90) ?? current.subhead,
+      cta: str(n.cta, 24) ?? current.cta,
+      benefits: Array.isArray(n.benefits)
+        ? (n.benefits.map((b: unknown) => stripChecks(str(b, 28) ?? "")).filter(Boolean).slice(0, 3) as string[])
+        : current.benefits,
+      price: str(n.price, 20) ?? current.price,
+      discount: str(n.discount, 20) ?? current.discount,
+      mood: isMood(n.mood) ? n.mood : current.mood,
+      archetype: isArchetype(n.archetype) ? n.archetype : current.archetype,
+      logoCorner:
+        typeof n.logoCorner === "string" && CORNERS.includes(n.logoCorner)
+          ? n.logoCorner
+          : current.logoCorner,
+    };
+
+    // Authoritative classification: a mood change needs a new Ideogram bg; every
+    // other edit (copy / archetype / logo slot) is a free Sharp re-render.
+    const kind: "text" | "background" = next.mood !== current.mood ? "background" : "text";
+
+    const changes = Array.isArray(o.changes)
+      ? (o.changes.map((c: unknown) => str(c, 80)).filter(Boolean) as string[]).slice(0, 6)
+      : [];
+
+    return { changes, kind, next };
+  } catch {
+    return fallback;
   }
 }

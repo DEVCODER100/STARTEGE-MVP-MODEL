@@ -19,7 +19,16 @@ import {
   type AdBrief,
   type AdField,
 } from "@/lib/ad-brief";
-import { generateAd, editAd, type AdImageMeta } from "@/lib/ad-imagegen";
+import {
+  generateAd,
+  editAd,
+  rerenderOverBackground,
+  regenerateFromState,
+  type AdImageMeta,
+  type AdRenderState,
+} from "@/lib/ad-imagegen";
+import { interpretEdit, type EditableAd } from "@/lib/brief-interpreter";
+import { isArchetype } from "@/lib/resolved-brief";
 import { describeProduct, writeAdCopy, editAdCopy } from "@/lib/ad-copy";
 import { loadImageBuffer, isAllowedImageUrl } from "@/lib/storage";
 import { inspect, limits, logSecurityEvent } from "@/lib/security";
@@ -105,11 +114,46 @@ function isImageRequest(text: string): boolean {
   return IMG_NOUN.test(text) && IMG_VERB.test(text);
 }
 
-// Edit of the most-recent ad ("change the headline to…", "make it say 40% off").
+// Edit of the most-recent ad ("change the headline to…", "make it say 40% off",
+// "move the logo top left", "use the big headline style", "make it premium").
 const EDIT_RX =
-  /\b(change|replace|rename|call it|instead|edit|update|shorter|longer|bigger|smaller|headline|sub-?head|subtitle|caption|cta|button|say|wording|reword)\b/i;
+  /\b(change|replace|rename|call it|instead|edit|update|shorter|longer|bigger|smaller|headline|sub-?head|subtitle|caption|cta|button|say|wording|reword|logo|move|mood|premium|minimal|energetic|warm|bold|style|layout|archetype|font)\b/i;
 function isEditInstruction(text: string): boolean {
   return EDIT_RX.test(text) && !isImageRequest(text);
+}
+
+// "yes" to a proposed (cost-incurring) background edit.
+const AFFIRM_RX = /^\s*(yes|yep|yeah|yup|ya|ok|okay|sure|do it|go|go ahead|apply|confirm|please do|sounds good|👍|✅)\b/i;
+function isAffirmation(text: string): boolean {
+  return AFFIRM_RX.test(text.trim());
+}
+
+// Extract the editable spec from a stored render state (Part C).
+function stateToEditable(s: AdRenderState): EditableAd {
+  return {
+    headline: s.copy.headline,
+    subhead: s.copy.subhead,
+    cta: s.copy.cta,
+    benefits: s.copy.bullets,
+    price: s.price,
+    discount: s.discount,
+    mood: s.mood,
+    archetype: s.archetype,
+    logoCorner: s.logoCorner,
+  };
+}
+
+// Apply an interpreted edit back onto the render state.
+function applyEditable(s: AdRenderState, n: EditableAd): AdRenderState {
+  return {
+    ...s,
+    copy: { ...s.copy, headline: n.headline, subhead: n.subhead ?? s.copy.subhead, cta: n.cta, bullets: n.benefits },
+    price: n.price,
+    discount: n.discount,
+    mood: n.mood,
+    archetype: isArchetype(n.archetype) ? n.archetype : s.archetype,
+    logoCorner: (n.logoCorner as AdRenderState["logoCorner"]) ?? undefined,
+  };
 }
 
 // Pull a likely product name out of the request ("create an ad for a perfume
@@ -250,63 +294,150 @@ export async function POST(req: Request) {
     const rawPending = chatRow[0]?.pending_brief ?? null;
     const pendingBrief: AdBrief | null = isAdBrief(rawPending) ? rawPending : null;
 
+    // Shared "out of image credits" response.
+    const imageLimit = async () => {
+      await logEvent(user.id, "limit_hit", { limitType: "images" });
+      const usage = await getUsage(user.id);
+      await sql`INSERT INTO chat_messages (chat_id, role, content) VALUES (${chatId}, 'assistant', ${MVP_LIMIT_MESSAGE})`;
+      await sql`UPDATE chats SET updated_at = now() WHERE id = ${chatId}`;
+      return NextResponse.json({ reply: MVP_LIMIT_MESSAGE, mvpLimit: true, limitType: "images", usage, chatId });
+    };
+
     // ───── NATURAL-LANGUAGE EDIT of the most recent ad ─────
-    if (!briefAnswer && !pendingBrief && !photoUrl && latest && isEditInstruction(latest.content)) {
-      const lastImg = await sql`
-        SELECT id, image_meta FROM chat_messages
-        WHERE chat_id = ${chatId} AND image_url IS NOT NULL
-        ORDER BY created_at DESC LIMIT 1
-      `;
-      const meta = lastImg[0]?.image_meta as AdImageMeta | null;
-      if (meta && meta.v === 2 && meta.copy) {
-        if (!(await canGenerateImage(user.id))) {
-          await logEvent(user.id, "limit_hit", { limitType: "images" });
+    if (!briefAnswer && !pendingBrief && !photoUrl && latest) {
+      const editIntent = isEditInstruction(latest.content);
+      const affirm = isAffirmation(latest.content);
+      if (editIntent || affirm) {
+        const lastImg = await sql`
+          SELECT id, image_meta FROM chat_messages
+          WHERE chat_id = ${chatId} AND image_url IS NOT NULL
+          ORDER BY created_at DESC LIMIT 1
+        `;
+        const rawMeta = (lastImg[0]?.image_meta ?? null) as
+          | (Record<string, unknown> & { v?: number; copy?: AdImageMeta["copy"]; renderState?: AdRenderState })
+          | null;
+        const state =
+          rawMeta?.renderState && rawMeta.renderState.v === 3 ? rawMeta.renderState : null;
+
+        // ── Phase 2 smart edit (render state present) ──
+        if (state) {
+          // Persist an edited ad as a fresh assistant message (keeps the v2 meta
+          // shape for the manual Edit panel + the v3 renderState for future edits).
+          const emit = async (url: string, nextState: AdRenderState, reply: string) => {
+            const storedMeta = {
+              ...(rawMeta ?? {}),
+              v: 2,
+              copy: {
+                headline: nextState.copy.headline,
+                subhead: nextState.copy.subhead ?? "",
+                cta: nextState.copy.cta,
+              },
+              renderState: { ...nextState, pendingEdit: null },
+            };
+            // Clear any pending edit on the prior ad message.
+            await sql`UPDATE chat_messages SET image_meta = ${JSON.stringify({ ...(rawMeta ?? {}), renderState: { ...state, pendingEdit: null } })}::jsonb WHERE id = ${lastImg[0].id}`;
+            const inserted = await sql`
+              INSERT INTO chat_messages (chat_id, role, content, image_url, image_meta)
+              VALUES (${chatId}, 'assistant', ${reply}, ${url}, ${JSON.stringify(storedMeta)}::jsonb)
+              RETURNING id`;
+            await sql`UPDATE chats SET updated_at = now() WHERE id = ${chatId}`;
+            const usage = await getUsage(user.id);
+            return NextResponse.json({
+              reply,
+              imageUrl: url,
+              imageMeta: { v: 2, copy: storedMeta.copy, messageId: inserted[0].id },
+              usage,
+              chatId,
+            });
+          };
+
+          // (a) Confirm a previously-proposed (cost-incurring) background edit.
+          if (state.pendingEdit && affirm) {
+            if (!(await canGenerateImage(user.id))) return imageLimit();
+            const changes = state.pendingEdit.changes;
+            const applied: AdRenderState = { ...state, ...state.pendingEdit.next, pendingEdit: null };
+            const result = await regenerateFromState(applied);
+            await consumeImage(user.id);
+            await logEvent(user.id, "image_generated", { kind: "nl_edit_bg", fallback: result.fallback });
+            return emit(result.url, result.state!, `✅ New background applied — used 1 generation.\n• ${changes.join("\n• ")}`);
+          }
+
+          // (b) A fresh edit instruction.
+          if (editIntent) {
+            const outcome = await interpretEdit(stateToEditable(state), latest.content);
+            if (!outcome.changes.length) {
+              const reply =
+                'I couldn\'t tell what to change — try e.g. "change the headline to SHIP FASTER", "use the big headline style", or "make it premium".';
+              await sql`INSERT INTO chat_messages (chat_id, role, content) VALUES (${chatId}, 'assistant', ${reply})`;
+              await sql`UPDATE chats SET updated_at = now() WHERE id = ${chatId}`;
+              const usage = await getUsage(user.id);
+              return NextResponse.json({ reply, usage, chatId });
+            }
+            const nextState = applyEditable(state, outcome.next);
+
+            if (outcome.kind === "text") {
+              // Free: re-render text/logo over the SAME background — no credit.
+              const { url } = await rerenderOverBackground(nextState);
+              await logEvent(user.id, "image_generated", { kind: "nl_edit_text", fallback: false });
+              return emit(
+                url,
+                nextState,
+                `✏️ Done — text-only change, instant and free (no generation used):\n• ${outcome.changes.join("\n• ")}`
+              );
+            }
+
+            // Background edit → confirm before spending a generation.
+            if (!(await canGenerateImage(user.id))) return imageLimit();
+            const pending: AdRenderState = {
+              ...state,
+              pendingEdit: {
+                changes: outcome.changes,
+                next: {
+                  mood: nextState.mood,
+                  copy: nextState.copy,
+                  price: nextState.price,
+                  discount: nextState.discount,
+                  archetype: nextState.archetype,
+                  logoCorner: nextState.logoCorner,
+                },
+              },
+            };
+            await sql`UPDATE chat_messages SET image_meta = ${JSON.stringify({ ...(rawMeta ?? {}), renderState: pending })}::jsonb WHERE id = ${lastImg[0].id}`;
+            const reply = `This one needs a new background, so it'll use 1 generation:\n• ${outcome.changes.join("\n• ")}\n\nReply "yes" to apply, or tell me a different change.`;
+            await sql`INSERT INTO chat_messages (chat_id, role, content) VALUES (${chatId}, 'assistant', ${reply})`;
+            await sql`UPDATE chats SET updated_at = now() WHERE id = ${chatId}`;
+            const usage = await getUsage(user.id);
+            return NextResponse.json({ reply, editConfirm: true, changes: outcome.changes, usage, chatId });
+          }
+        }
+
+        // ── Legacy v2 edit (older ads without a render state) ──
+        const meta = rawMeta && rawMeta.v === 2 && rawMeta.copy ? (rawMeta as unknown as AdImageMeta) : null;
+        if (meta && editIntent) {
+          if (!(await canGenerateImage(user.id))) return imageLimit();
+          const newCopy = await editAdCopy(meta.copy, latest.content);
+          const result = await editAd(brand, meta, newCopy);
+          await consumeImage(user.id);
+          await logEvent(user.id, "image_generated", { kind: "nl_edit", fallback: result.fallback });
+          const newMeta: AdImageMeta = { ...meta, color: result.color, copy: result.copy, lever: result.lever };
+          await sql`UPDATE chat_messages SET image_url = ${result.url}, image_meta = ${JSON.stringify(newMeta)}::jsonb WHERE id = ${lastImg[0].id}`;
+          const reply = "Updated the ad with your change.";
+          const inserted = await sql`
+            INSERT INTO chat_messages (chat_id, role, content, image_url, image_meta)
+            VALUES (${chatId}, 'assistant', ${reply}, ${result.url}, ${JSON.stringify(newMeta)}::jsonb)
+            RETURNING id`;
+          await sql`UPDATE chats SET updated_at = now() WHERE id = ${chatId}`;
           const usage = await getUsage(user.id);
-          await sql`
-            INSERT INTO chat_messages (chat_id, role, content)
-            VALUES (${chatId}, 'assistant', ${MVP_LIMIT_MESSAGE})
-          `;
           return NextResponse.json({
-            reply: MVP_LIMIT_MESSAGE,
-            mvpLimit: true,
-            limitType: "images",
+            reply,
+            imageUrl: result.url,
+            imageMeta: { ...newMeta, messageId: inserted[0].id },
+            fallback: result.fallback,
             usage,
             chatId,
+            debug: result.debug,
           });
         }
-        const newCopy = await editAdCopy(meta.copy, latest.content);
-        const result = await editAd(brand, meta, newCopy);
-        await consumeImage(user.id);
-        await logEvent(user.id, "image_generated", { kind: "nl_edit", fallback: result.fallback });
-
-        const newMeta: AdImageMeta = {
-          ...meta,
-          color: result.color,
-          copy: result.copy,
-          lever: result.lever,
-        };
-        await sql`
-          UPDATE chat_messages
-          SET image_url = ${result.url}, image_meta = ${JSON.stringify(newMeta)}::jsonb
-          WHERE id = ${lastImg[0].id}
-        `;
-        const reply = "Updated the ad with your change.";
-        const inserted = await sql`
-          INSERT INTO chat_messages (chat_id, role, content, image_url, image_meta)
-          VALUES (${chatId}, 'assistant', ${reply}, ${result.url}, ${JSON.stringify(newMeta)}::jsonb)
-          RETURNING id
-        `;
-        await sql`UPDATE chats SET updated_at = now() WHERE id = ${chatId}`;
-        const usage = await getUsage(user.id);
-        return NextResponse.json({
-          reply,
-          imageUrl: result.url,
-          imageMeta: { ...newMeta, messageId: inserted[0].id },
-          fallback: result.fallback,
-          usage,
-          chatId,
-          debug: result.debug,
-        });
       }
     }
 
@@ -454,10 +585,13 @@ export async function POST(req: Request) {
         copy: result.copy,
         lever: result.lever,
       };
+      // Persist the Phase 2 render state alongside the v2 meta so conversational
+      // edits can re-render over the same background (Part C).
+      const storedMeta = { ...meta, renderState: result.state };
 
       const inserted = await sql`
         INSERT INTO chat_messages (chat_id, role, content, image_url, image_meta)
-        VALUES (${chatId}, 'assistant', ${reply}, ${result.url}, ${JSON.stringify(meta)}::jsonb)
+        VALUES (${chatId}, 'assistant', ${reply}, ${result.url}, ${JSON.stringify(storedMeta)}::jsonb)
         RETURNING id
       `;
       await sql`
