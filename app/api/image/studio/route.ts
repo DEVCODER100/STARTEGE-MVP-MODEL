@@ -35,6 +35,7 @@ const Body = z.object({
   mode: z.string().optional(),
   screenshotUrl: z.string().max(2000).optional(),
   frameType: z.string().max(20).optional(),
+  useBrandLogo: z.boolean().optional(), // opt-in: place the saved brand logo
   images: z
     .array(
       z.object({
@@ -123,6 +124,7 @@ export async function POST(req: Request) {
             description,
             photoUrl: legacyPhotoUrl,
             mode,
+            useBrandLogo: parsed.data.useBrandLogo,
             brief: brief
               ? {
                   productSource:

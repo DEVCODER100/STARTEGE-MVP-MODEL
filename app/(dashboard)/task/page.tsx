@@ -98,6 +98,8 @@ export default function ImageStudioPage() {
   const [uploadRole, setUploadRole] = useState<ImageRole>("screenshot");
   const [saveToBrand, setSaveToBrand] = useState(true);
   const [saveLogoDefault, setSaveLogoDefault] = useState(true);
+  // Opt-in: place the saved brand logo on this ad (no logo is added otherwise).
+  const [useBrandLogo, setUseBrandLogo] = useState(false);
 
   // Interpretation layer: the confirmation moment before any credit is spent.
   const [interpreting, setInterpreting] = useState(false);
@@ -299,6 +301,7 @@ export default function ImageStudioPage() {
     await runStudio({
       description: text,
       images: pendingBrief.images,
+      useBrandLogo,
       brief: {
         product: { source: b.product.source, name: b.product.name },
         mood: b.mood,
@@ -433,12 +436,15 @@ export default function ImageStudioPage() {
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             {chips.map((c) => {
-              const active = has(c.text);
+              // The logo chip is an opt-in toggle (place my saved brand logo),
+              // not a text insert — no logo is added unless it's on.
+              const isLogo = c.id === "logo";
+              const active = isLogo ? useBrandLogo : has(c.text);
               return (
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => toggle(c.text)}
+                  onClick={() => (isLogo ? setUseBrandLogo((v) => !v) : toggle(c.text))}
                   className={`rounded-full border px-3.5 py-2 text-[13px] transition-colors ${
                     active
                       ? "border-strategy bg-strategy-tint text-strategy-deep"

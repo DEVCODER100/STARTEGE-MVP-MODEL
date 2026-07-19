@@ -134,7 +134,6 @@ export async function generateAd(
     product: heroSubject,
     render: lever.render,
     photoUrl: isExact ? brief.photoUrl : undefined,
-    logoUrl: defaultLogoUrl(brand),
   });
 
   return {
@@ -168,6 +167,7 @@ export interface DescribeOptions {
   photoUrl?: string; // optional uploaded product photo
   mode?: AdMode; // exact | lookalike (only meaningful with a photo)
   productDescription?: string; // optional vision description for lookalike
+  useBrandLogo?: boolean; // opt-in: place the saved brand logo (brand_profiles.logo_url)
   // ── ResolvedBrief overrides (the interpretation layer, when present) ──
   brief?: {
     productSource?: "uploaded" | "named" | "none";
@@ -242,7 +242,9 @@ export async function generateFromDescription(
     photoUrl: isExact ? opts.photoUrl : undefined,
     mood: brief?.mood ?? merged.mood,
     productPhotoUrl: brief?.productPhotoUrl,
-    logoUrl: brief?.logoUrl ?? defaultLogoUrl(brand),
+    // Logo is opt-in: an uploaded logo for THIS ad, or the saved brand logo only
+    // when the user explicitly asked for it. Never auto-added to every ad.
+    logoUrl: brief?.logoUrl ?? (opts.useBrandLogo ? defaultLogoUrl(brand) : undefined),
     archetype: brief?.archetype,
     aspectRatio: brief?.aspectRatio,
     price: brief?.price,
