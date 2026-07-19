@@ -333,6 +333,7 @@ export async function drawSplitAdText(image: Buffer, opts: SplitTextOptions): Pr
   }
 
   // ── CTA pill ────────────────────────────────────────────────────────────────
+  let ctaRect: { x: number; y: number; w: number; h: number } | null = null;
   if (cta) {
     ctx.font = `600 ${ctaSize}px ${SERIF}`;
     const padX = Math.round(ctaSize * 1.2);
@@ -350,6 +351,7 @@ export async function drawSplitAdText(image: Buffer, opts: SplitTextOptions): Pr
       else if (cfg.cta.place === "bottomRight") pillX = W - safeX - Math.round(W * 0.04) - pillW;
       else pillX = safeX + Math.round(W * 0.04);
     }
+    ctaRect = { x: pillX, y: pillY, w: pillW, h: ctaH };
     roundRect(ctx, pillX, pillY, pillW, ctaH, Math.round(ctaH / 2));
     ctx.fillStyle = accent;
     ctx.fill();
@@ -375,17 +377,30 @@ export async function drawSplitAdText(image: Buffer, opts: SplitTextOptions): Pr
           : corner === "tr" || corner === "br"
           ? W - m - logoW
           : m;
-      const ly = corner === "tl" || corner === "tr" ? m : H - m - logoH;
+      let ly = corner === "tl" || corner === "tr" ? m : H - m - logoH;
+
+      // Never overlap the CTA pill: if the slot collides with it, lift the logo
+      // to sit just above the pill (with a gap).
+      if (ctaRect) {
+        const gap = Math.round(H * 0.02);
+        const hitX = lx < ctaRect.x + ctaRect.w + gap && lx + logoW + gap > ctaRect.x;
+        const hitY = ly < ctaRect.y + ctaRect.h + gap && ly + logoH + gap > ctaRect.y;
+        if (hitX && hitY) ly = Math.max(safeY, ctaRect.y - gap - logoH);
+      }
 
       // Sample the slot region on the COMPOSITED bg, before drawing the logo.
       const slotLum = zoneLuminance(ctx, lx, ly, logoW, logoH, W, H);
       const dark = slotLum === null || slotLum < 0.5; // dark slot → white logo
-      // Ambiguous mid-tone → a soft rounded pad guarantees separation.
-      if (slotLum !== null && slotLum >= 0.4 && slotLum <= 0.62) {
-        const pad = Math.round(logoW * 0.14);
-        roundRect(ctx, lx - pad, ly - pad, logoW + pad * 2, logoH + pad * 2, Math.round(pad));
-        ctx.fillStyle = dark ? "rgba(0,0,0,0.42)" : "rgba(255,255,255,0.55)";
-        ctx.fill();
+      // Ambiguous mid-tone → a SOFT feathered scrim (never a hard card/box).
+      if (slotLum !== null && slotLum >= 0.42 && slotLum <= 0.6) {
+        drawScrim(
+          ctx,
+          lx + logoW / 2,
+          ly + logoH / 2,
+          Math.max(logoW, logoH) * 0.95,
+          dark,
+          0.28
+        );
       }
       if (dark) ctx.drawImage(whiteLogo(logoImg, logoW, logoH), lx, ly, logoW, logoH);
       else ctx.drawImage(logoImg, lx, ly, logoW, logoH);
